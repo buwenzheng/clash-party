@@ -903,5 +903,24 @@
     "previewFailed": "Недействительный файл плагина",
     "outdatedFile": "Формат файла плагина устарел; получите новый у провайдера",
     "fileTooLarge": "Файл плагина слишком большой"
-  }
+  },
+  "gameAccel.enable": "Включить ускорение игр",
+  "gameAccel.enableHint": "Создаёт группы игры, платформы и загрузки",
+  "gameAccel.mode": "Режим",
+  "gameAccel.modeOverlay": "Наложение",
+  "gameAccel.modeExclusive": "Эксклюзивный",
+  "gameAccel.upstream": "Верхняя группа",
+  "gameAccel.upstreamAuto": "Авто",
+  "gameAccel.downloadViaProxy": "Загрузка через прокси",
+  "gameAccel.tunWarning": "Для ускорения игр требуется TUN; сейчас TUN выключен.",
+  "gameAccel.goTun": "Открыть TUN",
+  "gameAccel.groups": "Группы",
+  "gameAccel.groupPending": "Появится после включения и запуска ядра",
+  "gameAccel.platforms": "Платформы",
+  "gameAccel.games": "Мои игры",
+  "gameAccel.addGame": "Добавить игру",
+  "gameAccel.addGameTitle": "Выберите исполняемый файл игры",
+  "gameAccel.emptyGames": "Игр пока нет. Добавьте exe или папку.",
+  "gameAccel.manualSource": "Вручную",
+  "gameAccel.saved": "Настройки ускорения игр сохранены"
 }

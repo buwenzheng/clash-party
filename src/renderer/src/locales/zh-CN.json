@@ -920,5 +920,24 @@
     "previewFailed": "插件文件无效",
     "outdatedFile": "该插件文件格式已过期，请从机场重新获取",
     "fileTooLarge": "插件文件过大"
-  }
+  },
+  "gameAccel.enable": "启用游戏加速",
+  "gameAccel.enableHint": "开启后生成游戏、平台和下载策略组",
+  "gameAccel.mode": "模式",
+  "gameAccel.modeOverlay": "叠加",
+  "gameAccel.modeExclusive": "独占",
+  "gameAccel.upstream": "上游策略组",
+  "gameAccel.upstreamAuto": "自动选择",
+  "gameAccel.downloadViaProxy": "下载走代理",
+  "gameAccel.tunWarning": "游戏加速需要开启 TUN；当前 TUN 未开启。",
+  "gameAccel.goTun": "去开启",
+  "gameAccel.groups": "策略组",
+  "gameAccel.groupPending": "开启后生成，内核就绪后显示当前节点",
+  "gameAccel.platforms": "游戏平台",
+  "gameAccel.games": "我的游戏",
+  "gameAccel.addGame": "添加游戏",
+  "gameAccel.addGameTitle": "选择游戏可执行文件",
+  "gameAccel.emptyGames": "还没有游戏，添加 exe 或文件夹",
+  "gameAccel.manualSource": "手动",
+  "gameAccel.saved": "游戏加速配置已保存"
 }

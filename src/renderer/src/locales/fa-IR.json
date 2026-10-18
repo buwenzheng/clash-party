@@ -897,5 +897,24 @@
     "previewFailed": "فایل افزونه نامعتبر است",
     "outdatedFile": "قالب فایل افزونه قدیمی است؛ لطفاً نسخه جدید را از سرویس‌دهنده دریافت کنید",
     "fileTooLarge": "فایل افزونه بیش از حد بزرگ است"
-  }
+  },
+  "gameAccel.enable": "فعال‌سازی شتاب بازی",
+  "gameAccel.enableHint": "گروه‌های بازی، پلتفرم و دانلود ساخته می‌شوند",
+  "gameAccel.mode": "حالت",
+  "gameAccel.modeOverlay": "هم‌پوشانی",
+  "gameAccel.modeExclusive": "اختصاصی",
+  "gameAccel.upstream": "گروه بالادست",
+  "gameAccel.upstreamAuto": "خودکار",
+  "gameAccel.downloadViaProxy": "دانلود از طریق پراکسی",
+  "gameAccel.tunWarning": "شتاب بازی به TUN نیاز دارد و TUN اکنون خاموش است.",
+  "gameAccel.goTun": "باز کردن TUN",
+  "gameAccel.groups": "گروه‌ها",
+  "gameAccel.groupPending": "پس از فعال‌سازی و آماده شدن هسته نمایش داده می‌شود",
+  "gameAccel.platforms": "پلتفرم‌ها",
+  "gameAccel.games": "بازی‌های من",
+  "gameAccel.addGame": "افزودن بازی",
+  "gameAccel.addGameTitle": "فایل اجرایی بازی را انتخاب کنید",
+  "gameAccel.emptyGames": "هنوز بازی‌ای نیست. exe یا پوشه اضافه کنید.",
+  "gameAccel.manualSource": "دستی",
+  "gameAccel.saved": "تنظیمات شتاب بازی ذخیره شد"
 }

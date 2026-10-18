@@ -920,5 +920,24 @@
     "previewFailed": "Invalid plugin file",
     "outdatedFile": "This plugin file format is outdated; please obtain the new one from your provider",
     "fileTooLarge": "Plugin file is too large"
-  }
+  },
+  "gameAccel.enable": "Enable game boost",
+  "gameAccel.enableHint": "Creates the game, platform and download groups",
+  "gameAccel.mode": "Mode",
+  "gameAccel.modeOverlay": "Overlay",
+  "gameAccel.modeExclusive": "Exclusive",
+  "gameAccel.upstream": "Upstream group",
+  "gameAccel.upstreamAuto": "Auto",
+  "gameAccel.downloadViaProxy": "Download via proxy",
+  "gameAccel.tunWarning": "Game boost requires TUN, which is currently disabled.",
+  "gameAccel.goTun": "Open TUN",
+  "gameAccel.groups": "Strategy groups",
+  "gameAccel.groupPending": "Available after enabling and core is ready",
+  "gameAccel.platforms": "Platforms",
+  "gameAccel.games": "My games",
+  "gameAccel.addGame": "Add game",
+  "gameAccel.addGameTitle": "Select game executable",
+  "gameAccel.emptyGames": "No games yet. Add an exe or folder.",
+  "gameAccel.manualSource": "Manual",
+  "gameAccel.saved": "Game boost settings saved"
 }

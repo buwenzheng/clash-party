@@ -920,5 +920,24 @@
     "previewFailed": "外掛檔案無效",
     "outdatedFile": "該外掛檔案格式已過期，請從機場重新取得",
     "fileTooLarge": "外掛檔案過大"
-  }
+  },
+  "gameAccel.enable": "啟用遊戲加速",
+  "gameAccel.enableHint": "開啟後產生遊戲、平台與下載策略組",
+  "gameAccel.mode": "模式",
+  "gameAccel.modeOverlay": "疊加",
+  "gameAccel.modeExclusive": "獨佔",
+  "gameAccel.upstream": "上游策略組",
+  "gameAccel.upstreamAuto": "自動選擇",
+  "gameAccel.downloadViaProxy": "下載走代理",
+  "gameAccel.tunWarning": "遊戲加速需要開啟 TUN；目前 TUN 未開啟。",
+  "gameAccel.goTun": "去開啟",
+  "gameAccel.groups": "策略組",
+  "gameAccel.groupPending": "開啟後產生，內核就緒後顯示目前節點",
+  "gameAccel.platforms": "遊戲平台",
+  "gameAccel.games": "我的遊戲",
+  "gameAccel.addGame": "新增遊戲",
+  "gameAccel.addGameTitle": "選擇遊戲執行檔",
+  "gameAccel.emptyGames": "還沒有遊戲，新增 exe 或資料夾",
+  "gameAccel.manualSource": "手動",
+  "gameAccel.saved": "遊戲加速設定已儲存"
 }
