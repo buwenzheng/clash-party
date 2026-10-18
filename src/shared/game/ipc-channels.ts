@@ -12,6 +12,7 @@ export const GAME_ACCEL_INVOKE_CHANNELS = {
   guardAlerts: 'gameAccelGuardAlerts',
   handleGuardAlert: 'gameAccelHandleGuardAlert',
   markHost: 'gameAccelMarkHost',
+  trafficTop: 'gameAccelTrafficTop',
   optimizeGroup: 'gameAccelOptimizeGroup',
   setPlatformDirect: 'gameAccelSetPlatformDirect',
   restoreAuto: 'gameAccelRestoreAuto',

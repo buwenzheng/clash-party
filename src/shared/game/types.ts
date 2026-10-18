@@ -239,6 +239,15 @@ export interface GameAccelLiveState {
   alerts: GuardAlert[]
 }
 
+export interface GameTrafficTop {
+  host: string
+  process: string
+  connections: number
+  upload: number
+  download: number
+  chain: string[]
+}
+
 export interface GameAccelPreview {
   yaml: string
   summary: GeneratedSummary

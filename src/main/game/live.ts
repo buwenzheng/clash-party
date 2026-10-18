@@ -6,6 +6,7 @@ import type {
   CaptureProcess,
   GameAccelConfig,
   GameAccelLiveState,
+  GameTrafficTop,
   GuardAlert
 } from '../../shared/game/types'
 import { loadGameAccelConfig, patchGameAccelConfig } from './store'
@@ -304,6 +305,28 @@ export function getGameLiveState(): GameAccelLiveState {
 
 export function getGuardAlerts(): GuardAlert[] {
   return structuredClone(alerts)
+}
+
+export function getTrafficTop(limit = 10): GameTrafficTop[] {
+  const entries = new Map<string, GameTrafficTop>()
+  for (const connection of latestInfo?.connections ?? []) {
+    const host = connection.metadata.host || connection.metadata.destinationIP || 'unknown'
+    const process = connectionName(connection)
+    const key = `${host}|${process}`
+    const entry = entries.get(key) ?? {
+      host,
+      process,
+      connections: 0,
+      upload: 0,
+      download: 0,
+      chain: connection.chains
+    }
+    entry.connections += 1
+    entry.upload += connection.upload
+    entry.download += connection.download
+    entries.set(key, entry)
+  }
+  return [...entries.values()].sort((a, b) => b.download - a.download).slice(0, Math.max(1, limit))
 }
 
 export function startGameCapture(): void {

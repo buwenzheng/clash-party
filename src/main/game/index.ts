@@ -139,6 +139,20 @@ export async function runGameAccelDiagnose(): Promise<GameAccelDiagnostic[]> {
       code: 'TUN_DISABLED',
       message: 'TUN is disabled; game traffic may not be captured.'
     })
+  } else {
+    try {
+      const { checkTunPermissions } = await import('../core/permissions')
+      if (!(await checkTunPermissions())) {
+        diagnostics.push({
+          level: 'warning',
+          code: 'TUN_PERMISSION_MISSING',
+          message: 'TUN permissions are missing; grant them from the TUN page.',
+          fix: 'tun-permissions'
+        })
+      }
+    } catch {
+      // Permission probing is best-effort on unsupported platforms.
+    }
   }
   if (profile['find-process-mode'] === 'off') {
     diagnostics.push({

@@ -9,6 +9,7 @@ import type {
   GameAccelState,
   GameCandidate,
   GameItem,
+  GameTrafficTop,
   GuardAlert,
   PlatformPreset
 } from '../../../shared/game/types'
@@ -67,6 +68,10 @@ export function gameAccelStopCapture(): Promise<void> {
 
 export function gameAccelGuardAlerts(): Promise<GuardAlert[]> {
   return invoke(GAME_ACCEL_INVOKE_CHANNELS.guardAlerts)
+}
+
+export function gameAccelTrafficTop(limit = 10): Promise<GameTrafficTop[]> {
+  return invoke(GAME_ACCEL_INVOKE_CHANNELS.trafficTop, limit)
 }
 
 export function gameAccelHandleGuardAlert(

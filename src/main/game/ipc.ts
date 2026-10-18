@@ -16,6 +16,7 @@ import type {
   GameAccelState,
   GameCandidate,
   GameItem,
+  GameTrafficTop,
   GuardAlert,
   PlatformPreset
 } from '../../shared/game/types'
@@ -31,6 +32,7 @@ import { isValidDomain, normalizeDomain } from '../../shared/game/rule-utils'
 import {
   getGameLiveState,
   getGuardAlerts,
+  getTrafficTop,
   handleGuardAlert as markGuardAlertHandled,
   startGameCapture,
   stopGameCapture
@@ -164,6 +166,10 @@ export async function gameAccelStopCapture(): Promise<void> {
 
 export async function gameAccelGuardAlerts(): Promise<GuardAlert[]> {
   return getGuardAlerts()
+}
+
+export async function gameAccelTrafficTop(limit = 10): Promise<GameTrafficTop[]> {
+  return getTrafficTop(limit)
 }
 
 export async function gameAccelMarkHost(host: string, action: 'direct' | 'proxy'): Promise<void> {
@@ -301,6 +307,7 @@ export const gameAccelHandlers = {
   [GAME_ACCEL_INVOKE_CHANNELS.startCapture]: gameAccelStartCapture,
   [GAME_ACCEL_INVOKE_CHANNELS.stopCapture]: gameAccelStopCapture,
   [GAME_ACCEL_INVOKE_CHANNELS.guardAlerts]: gameAccelGuardAlerts,
+  [GAME_ACCEL_INVOKE_CHANNELS.trafficTop]: gameAccelTrafficTop,
   [GAME_ACCEL_INVOKE_CHANNELS.handleGuardAlert]: gameAccelHandleGuardAlert,
   [GAME_ACCEL_INVOKE_CHANNELS.markHost]: gameAccelMarkHost,
   [GAME_ACCEL_INVOKE_CHANNELS.optimizeGroup]: gameAccelOptimizeGroup,
