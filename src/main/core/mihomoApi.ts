@@ -10,6 +10,7 @@ import { floatingWindow } from '../resolve/floatingWindow'
 import { recordTrafficUsage } from '../traffic/recorder'
 import { createLogger } from '../utils/logger'
 import { mihomoWorkConfigPath } from '../utils/dirs'
+import { observeGameConnections } from '../game/live'
 import { generateProfile, getRuntimeConfig } from './factory'
 import { syncControlDnsAfterApply } from './dnsOverrideGuard'
 import { getMihomoIpcPath, hasCoreProcess, restartCore } from './manager'
@@ -654,6 +655,7 @@ const mihomoConnections = async (): Promise<void> => {
     try {
       const info = JSON.parse(data) as IMihomoConnectionsInfo
       recordTrafficUsage(info)
+      observeGameConnections(info)
       if (__LEGACY_BUILD__ || mainWindow?.isVisible()) {
         mainWindow?.webContents.send('mihomoConnections', info)
       }

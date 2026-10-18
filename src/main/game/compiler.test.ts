@@ -133,6 +133,9 @@ describe('compileGameAccel', () => {
     expect(groups.some((group) => group.name === '🌐 游戏平台')).toBe(true)
     expect(groups.some((group) => group.name === '⬇️ 游戏下载')).toBe(true)
     expect(groups.some((group) => group.name === '🎮 区域·香港')).toBe(true)
+    expect(result.summary.groups).toEqual(
+      expect.arrayContaining(['🎮 游戏加速', '🌐 游戏平台', '⬇️ 游戏下载', '🎮 区域·香港'])
+    )
   })
 
   it('keeps the download group direct unless downloadViaProxy is enabled', () => {

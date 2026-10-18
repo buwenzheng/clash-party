@@ -6,6 +6,15 @@ export const GAME_ACCEL_INVOKE_CHANNELS = {
   removeGame: 'gameAccelRemoveGame',
   addFromPath: 'gameAccelAddFromPath',
   scan: 'gameAccelScan',
+  getLiveState: 'gameAccelGetLiveState',
+  startCapture: 'gameAccelStartCapture',
+  stopCapture: 'gameAccelStopCapture',
+  guardAlerts: 'gameAccelGuardAlerts',
+  handleGuardAlert: 'gameAccelHandleGuardAlert',
+  markHost: 'gameAccelMarkHost',
+  optimizeGroup: 'gameAccelOptimizeGroup',
+  setPlatformDirect: 'gameAccelSetPlatformDirect',
+  restoreAuto: 'gameAccelRestoreAuto',
   preview: 'gameAccelPreview',
   diagnose: 'gameAccelDiagnose',
   getPresets: 'gameAccelGetPresets',
@@ -13,7 +22,9 @@ export const GAME_ACCEL_INVOKE_CHANNELS = {
 } as const
 
 export const GAME_ACCEL_LISTEN_CHANNELS = {
-  updated: 'gameAccelUpdated'
+  updated: 'gameAccelUpdated',
+  liveUpdated: 'gameAccelLiveUpdated',
+  guardAlert: 'gameAccelGuardAlert'
 } as const
 
 export type GameAccelInvokeChannel =

@@ -226,6 +226,19 @@ export interface GuardAlert {
   handled?: 'direct' | 'proxy' | 'downloadMode' | 'ignored' | 'auto'
 }
 
+export interface GameAccelLiveState {
+  updatedAt: number
+  currentGame?: { id: string; name: string }
+  connections: number
+  upload: number
+  download: number
+  uploadSpeed: number
+  downloadSpeed: number
+  captureActive: boolean
+  capture: CaptureProcess[]
+  alerts: GuardAlert[]
+}
+
 export interface GameAccelPreview {
   yaml: string
   summary: GeneratedSummary

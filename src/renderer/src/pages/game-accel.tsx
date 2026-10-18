@@ -20,9 +20,17 @@ import { useControledMihomoConfig } from '@renderer/hooks/use-controled-mihomo-c
 import { useGroups } from '@renderer/hooks/use-groups'
 import {
   gameAccelAddFromPath,
+  gameAccelDiagnose,
+  gameAccelGetLiveState,
   gameAccelGetState,
+  gameAccelHandleGuardAlert,
+  gameAccelOptimizeGroup,
   gameAccelPatchConfig,
-  gameAccelScan
+  gameAccelRestoreAuto,
+  gameAccelScan,
+  gameAccelSetPlatformDirect,
+  gameAccelStartCapture,
+  gameAccelStopCapture
 } from '@renderer/utils/game-accel-ipc'
 import { getFilePath, mihomoChangeProxy } from '@renderer/utils/ipc'
 import React, { useEffect, useState } from 'react'
@@ -32,6 +40,8 @@ import { useNavigate } from 'react-router-dom'
 import useSWR from 'swr'
 import type {
   GameAccelConfig,
+  GameAccelDiagnostic,
+  GameAccelLiveState,
   GameCandidate,
   GameItem,
   PlatformSetting
@@ -54,6 +64,18 @@ function candidateKey(candidate: GameCandidate): string {
   return `${candidate.source}:${candidate.sourceId}`
 }
 
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MB`
+  return `${(bytes / 1024 / 1024 / 1024).toFixed(2)} GB`
+}
+
+interface GroupAction {
+  label: string
+  onPress: () => Promise<void>
+}
+
 interface GroupCardProps {
   testId: string
   title: string
@@ -61,6 +83,7 @@ interface GroupCardProps {
   groups: IMihomoMixedGroup[] | undefined
   hint: string
   disabled?: boolean
+  actions?: GroupAction[]
   onChange: (group: string, proxy: string) => Promise<void>
 }
 
@@ -71,6 +94,7 @@ const GroupCard: React.FC<GroupCardProps> = ({
   groups,
   hint,
   disabled = false,
+  actions = [],
   onChange
 }) => {
   const [changing, setChanging] = useState(false)
@@ -110,6 +134,21 @@ const GroupCard: React.FC<GroupCardProps> = ({
           ) : (
             <p className="text-tiny leading-5 text-default-500">{hint}</p>
           )}
+          {group && actions.length > 0 && (
+            <div className="flex flex-wrap gap-1">
+              {actions.map((action) => (
+                <Button
+                  key={action.label}
+                  size="sm"
+                  variant="flat"
+                  isDisabled={disabled || changing}
+                  onPress={() => void action.onPress()}
+                >
+                  {action.label}
+                </Button>
+              ))}
+            </div>
+          )}
         </CardBody>
       </Card>
     </div>
@@ -122,6 +161,11 @@ const GameAccel: React.FC = () => {
   const { data: state, mutate: mutateState } = useSWR('gameAccelGetState', gameAccelGetState, {
     revalidateOnFocus: false
   })
+  const { data: liveData, mutate: mutateLive } = useSWR(
+    'gameAccelGetLiveState',
+    gameAccelGetLiveState,
+    { refreshInterval: 5000, revalidateOnFocus: false }
+  )
   const { groups, mutate: mutateGroups } = useGroups()
   const { controledMihomoConfig } = useControledMihomoConfig()
   const [draft, setDraft] = useState<GameAccelConfig>()
@@ -134,6 +178,9 @@ const GameAccel: React.FC = () => {
   const [scanAdding, setScanAdding] = useState(false)
   const [scanResults, setScanResults] = useState<GameCandidate[]>([])
   const [scanSelected, setScanSelected] = useState<Set<string>>(new Set())
+  const [live, setLive] = useState<GameAccelLiveState>()
+  const [diagnostics, setDiagnostics] = useState<GameAccelDiagnostic[]>([])
+  const [checking, setChecking] = useState(false)
 
   useEffect(() => {
     if (state && !dirty) setDraft(state.config)
@@ -146,6 +193,23 @@ const GameAccel: React.FC = () => {
     })
     return unsubscribe
   }, [mutateState, mutateGroups])
+
+  useEffect(() => {
+    if (liveData) setLive(liveData)
+  }, [liveData])
+
+  useEffect(() => {
+    const offLive = window.electron.ipcRenderer.on('gameAccelLiveUpdated', (_event, info) => {
+      setLive(info as GameAccelLiveState)
+    })
+    const offAlert = window.electron.ipcRenderer.on('gameAccelGuardAlert', () => {
+      void mutateLive()
+    })
+    return () => {
+      offLive()
+      offAlert()
+    }
+  }, [mutateLive])
 
   if (!draft) {
     return (
@@ -284,6 +348,84 @@ const GameAccel: React.FC = () => {
     }
   }
 
+  const runDiagnose = async (): Promise<void> => {
+    setChecking(true)
+    try {
+      const result = await gameAccelDiagnose()
+      setDiagnostics(result)
+      if (result.length === 0) toast.success(t('gameAccel.diagnoseEmpty'))
+    } catch (error) {
+      toast.error(`${t('gameAccel.diagnoseFailed')}: ${String(error)}`)
+    } finally {
+      setChecking(false)
+    }
+  }
+
+  const toggleCapture = async (): Promise<void> => {
+    try {
+      if (live?.captureActive) await gameAccelStopCapture()
+      else await gameAccelStartCapture()
+      await mutateLive()
+    } catch (error) {
+      toast.error(String(error))
+    }
+  }
+
+  const handleAlert = async (id: string, action: 'direct' | 'proxy' | 'ignored'): Promise<void> => {
+    try {
+      await gameAccelHandleGuardAlert(id, action)
+      await mutateLive()
+    } catch (error) {
+      toast.error(String(error))
+    }
+  }
+
+  const addCaptured = async (processPath: string): Promise<void> => {
+    try {
+      const result = await gameAccelAddFromPath(processPath)
+      if (result.duplicate) {
+        toast.error(t('gameAccel.duplicateGame'))
+        return
+      }
+      update({ games: [...draft.games, result.game] })
+      toast.success(t('gameAccel.captureAdded'))
+    } catch (error) {
+      toast.error(String(error))
+    }
+  }
+
+  const optimizeGameGroup = async (): Promise<void> => {
+    try {
+      const best = await gameAccelOptimizeGroup(draft.groupNames.game)
+      if (!best) {
+        toast.error(t('gameAccel.optimizeFailed'))
+        return
+      }
+      await mutateGroups()
+      toast.success(`${t('gameAccel.optimized')}: ${best}`)
+    } catch (error) {
+      toast.error(String(error))
+    }
+  }
+
+  const setPlatformDirect = async (): Promise<void> => {
+    try {
+      await gameAccelSetPlatformDirect()
+      await mutateGroups()
+    } catch (error) {
+      toast.error(String(error))
+    }
+  }
+
+  const restorePlatformAuto = async (): Promise<void> => {
+    try {
+      await gameAccelRestoreAuto()
+      await mutateGroups()
+    } catch (error) {
+      toast.error(String(error))
+    }
+  }
+
   const persist = async (next: GameAccelConfig): Promise<void> => {
     setSaving(true)
     try {
@@ -317,18 +459,30 @@ const GameAccel: React.FC = () => {
     <BasePage
       title={t('gameAccel.title')}
       header={
-        <span data-testid="game-save">
-          <Button
-            id="game-save"
-            size="sm"
-            color="primary"
-            isLoading={saving}
-            isDisabled={!dirty}
-            onPress={() => void save()}
-          >
-            {t('common.save')}
-          </Button>
-        </span>
+        <div className="flex items-center gap-2">
+          <span data-testid="game-diagnose">
+            <Button
+              size="sm"
+              variant="flat"
+              isLoading={checking}
+              onPress={() => void runDiagnose()}
+            >
+              {t('gameAccel.diagnose')}
+            </Button>
+          </span>
+          <span data-testid="game-save">
+            <Button
+              id="game-save"
+              size="sm"
+              color="primary"
+              isLoading={saving}
+              isDisabled={!dirty}
+              onPress={() => void save()}
+            >
+              {t('common.save')}
+            </Button>
+          </span>
+        </div>
       }
     >
       <div data-testid="game-accel-page" className="flex flex-col gap-3 p-3">
@@ -340,6 +494,43 @@ const GameAccel: React.FC = () => {
               <Button size="sm" variant="flat" color="warning" onPress={() => navigate('/tun')}>
                 {t('gameAccel.goTun')}
               </Button>
+            </CardBody>
+          </Card>
+        )}
+
+        {diagnostics.length > 0 && (
+          <Card className="shadow-none">
+            <CardHeader className="flex items-center justify-between gap-2 p-4 pb-0">
+              <h3 className="font-bold">{t('gameAccel.diagnose')}</h3>
+              <Button size="sm" variant="light" onPress={() => setDiagnostics([])}>
+                {t('common.close')}
+              </Button>
+            </CardHeader>
+            <CardBody className="gap-2 p-4">
+              {diagnostics.map((diagnostic, index) => (
+                <div
+                  key={`${diagnostic.code}-${index}`}
+                  className="flex items-start gap-2 rounded-medium border border-default-200 p-3"
+                >
+                  <Chip
+                    size="sm"
+                    variant="flat"
+                    color={
+                      diagnostic.level === 'error'
+                        ? 'danger'
+                        : diagnostic.level === 'warning'
+                          ? 'warning'
+                          : 'primary'
+                    }
+                  >
+                    {diagnostic.level}
+                  </Chip>
+                  <div className="min-w-0">
+                    <p className="text-small">{diagnostic.message}</p>
+                    <p className="text-tiny text-default-500">{diagnostic.code}</p>
+                  </div>
+                </div>
+              ))}
             </CardBody>
           </Card>
         )}
@@ -424,6 +615,124 @@ const GameAccel: React.FC = () => {
         </Card>
 
         <Card className="shadow-none">
+          <CardHeader className="flex items-center justify-between gap-2 p-4 pb-0">
+            <h3 className="font-bold">{t('gameAccel.live')}</h3>
+            <Button
+              size="sm"
+              variant="flat"
+              isDisabled={!draft.enable}
+              onPress={() => void toggleCapture()}
+            >
+              {live?.captureActive ? t('gameAccel.captureStop') : t('gameAccel.captureStart')}
+            </Button>
+          </CardHeader>
+          <CardBody className="gap-4 p-4">
+            <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+              <div>
+                <p className="text-tiny text-default-500">{t('gameAccel.currentGame')}</p>
+                <p className="mt-1 text-small font-medium">
+                  {live?.currentGame?.name ?? t('gameAccel.noCurrentGame')}
+                </p>
+              </div>
+              <div>
+                <p className="text-tiny text-default-500">{t('gameAccel.connections')}</p>
+                <p className="mt-1 text-small font-medium">{live?.connections ?? 0}</p>
+              </div>
+              <div>
+                <p className="text-tiny text-default-500">↑</p>
+                <p className="mt-1 text-small font-medium">
+                  {formatBytes(live?.uploadSpeed ?? 0)}/s
+                </p>
+              </div>
+              <div>
+                <p className="text-tiny text-default-500">↓</p>
+                <p className="mt-1 text-small font-medium">
+                  {formatBytes(live?.downloadSpeed ?? 0)}/s
+                </p>
+              </div>
+            </div>
+
+            {live?.captureActive && (
+              <div className="flex flex-col gap-2">
+                <p className="text-small font-medium">{t('gameAccel.capture')}</p>
+                {live.capture.length === 0 ? (
+                  <p className="text-tiny text-default-500">{t('gameAccel.captureEmpty')}</p>
+                ) : (
+                  live.capture.slice(0, 8).map((item) => (
+                    <div
+                      key={item.processPath || item.process}
+                      className="flex items-center gap-3 rounded-medium border border-default-200 p-3"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-small font-medium">{item.process}</p>
+                        <p className="truncate text-tiny text-default-500">
+                          {item.processPath || '—'}
+                        </p>
+                        <p className="text-tiny text-default-500">
+                          {item.connections} · UDP {(item.udpRatio * 100).toFixed(0)}% ·{' '}
+                          {formatBytes(item.download)}
+                          {item.countries.length > 0 ? ` · ${item.countries.join(', ')}` : ''}
+                        </p>
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="flat"
+                        isDisabled={!item.processPath}
+                        onPress={() => void addCaptured(item.processPath)}
+                      >
+                        {t('gameAccel.addProcess')}
+                      </Button>
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
+
+            {live && live.alerts.length > 0 && (
+              <div className="flex flex-col gap-2">
+                <p className="text-small font-medium">{t('gameAccel.guardAlerts')}</p>
+                {live.alerts.slice(0, 5).map((alert) => (
+                  <div
+                    key={alert.id}
+                    className="flex flex-col gap-2 rounded-medium border border-warning/30 bg-warning/10 p-3 md:flex-row md:items-center"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-small font-medium">{alert.host}</p>
+                      <p className="truncate text-tiny text-default-500">
+                        {alert.process} · {formatBytes(alert.speed)}/s · {alert.chain.join(' → ')}
+                      </p>
+                    </div>
+                    <div className="flex shrink-0 gap-1">
+                      <Button
+                        size="sm"
+                        variant="flat"
+                        onPress={() => void handleAlert(alert.id, 'direct')}
+                      >
+                        {t('gameAccel.markDirect')}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="flat"
+                        onPress={() => void handleAlert(alert.id, 'proxy')}
+                      >
+                        {t('gameAccel.markProxy')}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="light"
+                        onPress={() => void handleAlert(alert.id, 'ignored')}
+                      >
+                        {t('gameAccel.ignore')}
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardBody>
+        </Card>
+
+        <Card className="shadow-none">
           <CardHeader className="p-4 pb-0">
             <h3 className="font-bold">{t('gameAccel.groups')}</h3>
           </CardHeader>
@@ -434,6 +743,7 @@ const GameAccel: React.FC = () => {
               groupName={draft.groupNames.game}
               groups={groups}
               hint={t('gameAccel.groupPending')}
+              actions={[{ label: t('gameAccel.optimize'), onPress: optimizeGameGroup }]}
               onChange={changeGroupProxy}
             />
             <GroupCard
@@ -442,6 +752,10 @@ const GameAccel: React.FC = () => {
               groupName={draft.groupNames.platform}
               groups={groups}
               hint={t('gameAccel.groupPending')}
+              actions={[
+                { label: t('gameAccel.webDirect'), onPress: setPlatformDirect },
+                { label: t('gameAccel.restoreAuto'), onPress: restorePlatformAuto }
+              ]}
               onChange={changeGroupProxy}
             />
             <GroupCard

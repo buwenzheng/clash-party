@@ -80,13 +80,36 @@ export async function finalizeGameYaml(yaml: string): Promise<string> {
   }
 }
 
+function stripGeneratedGroups(profile: IMihomoConfig, config: GameAccelConfig): IMihomoConfig {
+  const names = new Set([
+    config.groupNames.game,
+    config.groupNames.platform,
+    config.groupNames.download
+  ])
+  const next = structuredClone(profile) as unknown as Record<string, unknown>
+  const groups = Array.isArray(next['proxy-groups'])
+    ? (next['proxy-groups'] as { name?: string }[])
+    : []
+  next['proxy-groups'] = groups.filter(
+    (group) =>
+      !group.name ||
+      (!names.has(group.name) && !group.name.startsWith(config.groupNames.regionPrefix))
+  )
+  const rules = Array.isArray(next.rules) ? (next.rules as string[]) : []
+  next.rules = rules.filter((rule) => {
+    const target = rule.split(',').at(-1)
+    return !target || !names.has(target)
+  })
+  return next as unknown as IMihomoConfig
+}
+
 export async function getGameAccelPreview(): Promise<GameAccelPreview> {
   const config = await getConfig()
   // Dynamic import avoids a static factory <-> game module cycle.
   const { getRuntimeConfig } = await import('../core/factory')
   const profile = await getRuntimeConfig()
   const result = compileGameAccel({
-    profile,
+    profile: stripGeneratedGroups(profile, config),
     config,
     presets: listBuiltinPresets(),
     antiCheatPreset: getAntiCheatPreset(),
@@ -101,5 +124,51 @@ export async function getGameAccelPreview(): Promise<GameAccelPreview> {
 
 export async function runGameAccelDiagnose(): Promise<GameAccelDiagnostic[]> {
   const state = await getGameAccelState()
-  return state.diagnostics
+  const diagnostics = [...state.diagnostics]
+  if (!state.enable) return diagnostics
+
+  const { getRuntimeConfig } = await import('../core/factory')
+  const profile = await getRuntimeConfig()
+  if (!profile) return diagnostics
+
+  if (profile.tun?.enable !== true) {
+    diagnostics.push({
+      level: 'warning',
+      code: 'TUN_DISABLED',
+      message: 'TUN is disabled; game traffic may not be captured.'
+    })
+  }
+  if (profile['find-process-mode'] === 'off') {
+    diagnostics.push({
+      level: 'warning',
+      code: 'PROCESS_MODE_OFF',
+      message: 'find-process-mode is off; process matching may fail.'
+    })
+  }
+  if (!profile.proxies?.length) {
+    diagnostics.push({
+      level: 'error',
+      code: 'NO_PROXIES',
+      message: 'No proxy nodes are available.'
+    })
+  }
+
+  const groups = Array.isArray(profile['proxy-groups'])
+    ? (profile['proxy-groups'] as { name?: string }[])
+    : []
+  for (const name of [
+    state.config.groupNames.game,
+    state.config.groupNames.platform,
+    state.config.groupNames.download
+  ]) {
+    if (!groups.some((group) => group.name === name)) {
+      diagnostics.push({
+        level: 'error',
+        code: 'GAME_GROUP_MISSING',
+        message: 'The generated game strategy group is missing.',
+        params: { name }
+      })
+    }
+  }
+  return diagnostics
 }

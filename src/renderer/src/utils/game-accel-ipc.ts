@@ -4,10 +4,12 @@ import type {
   GameAccelConfig,
   GameAccelConfigPatch,
   GameAccelDiagnostic,
+  GameAccelLiveState,
   GameAccelPreview,
   GameAccelState,
   GameCandidate,
   GameItem,
+  GuardAlert,
   PlatformPreset
 } from '../../../shared/game/types'
 
@@ -49,6 +51,45 @@ export function gameAccelAddFromPath(filePath: string): Promise<GameAccelAddResu
 
 export function gameAccelScan(): Promise<GameCandidate[]> {
   return invoke(GAME_ACCEL_INVOKE_CHANNELS.scan)
+}
+
+export function gameAccelGetLiveState(): Promise<GameAccelLiveState> {
+  return invoke(GAME_ACCEL_INVOKE_CHANNELS.getLiveState)
+}
+
+export function gameAccelStartCapture(): Promise<void> {
+  return invoke(GAME_ACCEL_INVOKE_CHANNELS.startCapture)
+}
+
+export function gameAccelStopCapture(): Promise<void> {
+  return invoke(GAME_ACCEL_INVOKE_CHANNELS.stopCapture)
+}
+
+export function gameAccelGuardAlerts(): Promise<GuardAlert[]> {
+  return invoke(GAME_ACCEL_INVOKE_CHANNELS.guardAlerts)
+}
+
+export function gameAccelHandleGuardAlert(
+  id: string,
+  action: 'direct' | 'proxy' | 'downloadMode' | 'ignored' | 'auto'
+): Promise<GuardAlert | undefined> {
+  return invoke(GAME_ACCEL_INVOKE_CHANNELS.handleGuardAlert, id, action)
+}
+
+export function gameAccelMarkHost(host: string, action: 'direct' | 'proxy'): Promise<void> {
+  return invoke(GAME_ACCEL_INVOKE_CHANNELS.markHost, host, action)
+}
+
+export function gameAccelOptimizeGroup(groupName: string): Promise<string | undefined> {
+  return invoke(GAME_ACCEL_INVOKE_CHANNELS.optimizeGroup, groupName)
+}
+
+export function gameAccelSetPlatformDirect(): Promise<void> {
+  return invoke(GAME_ACCEL_INVOKE_CHANNELS.setPlatformDirect)
+}
+
+export function gameAccelRestoreAuto(): Promise<void> {
+  return invoke(GAME_ACCEL_INVOKE_CHANNELS.restoreAuto)
 }
 
 export function gameAccelPreview(): Promise<GameAccelPreview> {

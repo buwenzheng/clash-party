@@ -778,6 +778,7 @@ export function compileGameAccel(input: CompileGameAccelInput): CompileGameAccel
       diagnostics
     )
     const groups = buildGroups(profile, input.config, context)
+    summary.groups = groups.map((group) => group.name)
     const rules = buildRules(input.config, context, input.platform, diagnostics, summary)
 
     const existingGroups = profile['proxy-groups'] ?? []

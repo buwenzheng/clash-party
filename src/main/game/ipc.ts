@@ -11,14 +11,30 @@ import type {
   GameAccelConfig,
   GameAccelConfigPatch,
   GameAccelDiagnostic,
+  GameAccelLiveState,
   GameAccelPreview,
   GameAccelState,
   GameCandidate,
   GameItem,
+  GuardAlert,
   PlatformPreset
 } from '../../shared/game/types'
-import { mihomoHotReloadConfig } from '../core/mihomoApi'
+import {
+  mihomoChangeProxy,
+  mihomoGroupDelay,
+  mihomoGroups,
+  mihomoHotReloadConfig,
+  mihomoUnfixedProxy
+} from '../core/mihomoApi'
 import { mainWindow } from '../window'
+import { isValidDomain, normalizeDomain } from '../../shared/game/rule-utils'
+import {
+  getGameLiveState,
+  getGuardAlerts,
+  handleGuardAlert as markGuardAlertHandled,
+  startGameCapture,
+  stopGameCapture
+} from './live'
 import { listBuiltinPresets, mergePlatformPreset } from './presets'
 import { scanGameCandidates } from './scan'
 import { loadGameAccelConfig, patchGameAccelConfig } from './store'
@@ -111,6 +127,87 @@ export async function gameAccelScan(): Promise<GameCandidate[]> {
   return scanGameCandidates()
 }
 
+export async function gameAccelGetLiveState(): Promise<GameAccelLiveState> {
+  return getGameLiveState()
+}
+
+export async function gameAccelStartCapture(): Promise<void> {
+  startGameCapture()
+}
+
+export async function gameAccelStopCapture(): Promise<void> {
+  stopGameCapture()
+}
+
+export async function gameAccelGuardAlerts(): Promise<GuardAlert[]> {
+  return getGuardAlerts()
+}
+
+export async function gameAccelMarkHost(host: string, action: 'direct' | 'proxy'): Promise<void> {
+  if (!isValidDomain(host)) throw new Error('Invalid host')
+  const domain = normalizeDomain(host)
+  if (!domain) throw new Error('Invalid host')
+  const config = await loadGameAccelConfig()
+  const customDirect = config.customDirect.filter((entry) => entry.value !== domain)
+  const customProxy = config.customProxy.filter((entry) => entry !== domain)
+  if (action === 'direct') {
+    customDirect.push({ value: domain, kind: 'domain', origin: 'user', addedAt: Date.now() })
+  } else {
+    customProxy.push(domain)
+  }
+  await patchGameAccelConfig({ customDirect, customProxy })
+  await mihomoHotReloadConfig()
+  notifyUpdated()
+}
+
+export async function gameAccelHandleGuardAlert(
+  id: string,
+  action: 'direct' | 'proxy' | 'downloadMode' | 'ignored' | 'auto'
+): Promise<GuardAlert | undefined> {
+  const alert = markGuardAlertHandled(id, action)
+  if (!alert) return undefined
+  if (action === 'direct' || action === 'proxy') {
+    await gameAccelMarkHost(alert.host, action)
+  }
+  return alert
+}
+
+export async function gameAccelOptimizeGroup(groupName: string): Promise<string | undefined> {
+  const config = await loadGameAccelConfig()
+  const target = groupName || config.groupNames.game
+  if (!target) throw new Error('Group name is required')
+  const groups = await mihomoGroups()
+  const group = groups.find((item) => item.name === target)
+  if (!group) throw new Error('Group not found')
+  const delays = await mihomoGroupDelay(target)
+  let best: string | undefined
+  let bestDelay = Number.POSITIVE_INFINITY
+  for (const proxy of group.all) {
+    const delay = delays[proxy.name]
+    if (typeof delay === 'number' && delay > 0 && delay < bestDelay) {
+      best = proxy.name
+      bestDelay = delay
+    }
+  }
+  if (!best) return undefined
+  await mihomoChangeProxy(target, best)
+  return best
+}
+
+export async function gameAccelSetPlatformDirect(): Promise<void> {
+  const config = await loadGameAccelConfig()
+  await mihomoChangeProxy(config.groupNames.platform, 'DIRECT')
+}
+
+export async function gameAccelRestoreAuto(): Promise<void> {
+  const config = await loadGameAccelConfig()
+  try {
+    await mihomoUnfixedProxy(config.groupNames.platform)
+  } catch (error) {
+    if (!String(error).includes('Body invalid')) throw error
+  }
+}
+
 export async function gameAccelGetConfig(): Promise<GameAccelConfig> {
   return loadGameAccelConfig()
 }
@@ -177,6 +274,15 @@ export const gameAccelHandlers = {
   [GAME_ACCEL_INVOKE_CHANNELS.removeGame]: gameAccelRemoveGame,
   [GAME_ACCEL_INVOKE_CHANNELS.addFromPath]: gameAccelAddFromPath,
   [GAME_ACCEL_INVOKE_CHANNELS.scan]: gameAccelScan,
+  [GAME_ACCEL_INVOKE_CHANNELS.getLiveState]: gameAccelGetLiveState,
+  [GAME_ACCEL_INVOKE_CHANNELS.startCapture]: gameAccelStartCapture,
+  [GAME_ACCEL_INVOKE_CHANNELS.stopCapture]: gameAccelStopCapture,
+  [GAME_ACCEL_INVOKE_CHANNELS.guardAlerts]: gameAccelGuardAlerts,
+  [GAME_ACCEL_INVOKE_CHANNELS.handleGuardAlert]: gameAccelHandleGuardAlert,
+  [GAME_ACCEL_INVOKE_CHANNELS.markHost]: gameAccelMarkHost,
+  [GAME_ACCEL_INVOKE_CHANNELS.optimizeGroup]: gameAccelOptimizeGroup,
+  [GAME_ACCEL_INVOKE_CHANNELS.setPlatformDirect]: gameAccelSetPlatformDirect,
+  [GAME_ACCEL_INVOKE_CHANNELS.restoreAuto]: gameAccelRestoreAuto,
   [GAME_ACCEL_INVOKE_CHANNELS.preview]: gameAccelPreview,
   [GAME_ACCEL_INVOKE_CHANNELS.diagnose]: gameAccelDiagnose,
   [GAME_ACCEL_INVOKE_CHANNELS.getPresets]: gameAccelGetPresets,
