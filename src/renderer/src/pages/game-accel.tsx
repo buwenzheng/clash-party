@@ -1002,6 +1002,13 @@ const GameAccel: React.FC = () => {
                             disabled={added}
                             onChange={() => toggleScan(key)}
                           />
+                          {candidate.icon && (
+                            <img
+                              src={candidate.icon}
+                              alt=""
+                              className="h-8 w-8 shrink-0 rounded-medium object-contain"
+                            />
+                          )}
                           <div className="min-w-0 flex-1">
                             <p className="truncate text-small font-medium">{candidate.name}</p>
                             <p className="truncate text-tiny text-default-500">

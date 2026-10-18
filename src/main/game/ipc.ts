@@ -36,7 +36,7 @@ import {
   stopGameCapture
 } from './live'
 import { listBuiltinPresets, mergePlatformPreset } from './presets'
-import { scanGameCandidates } from './scan'
+import { scanGameCandidates, saveGameScanCache } from './scan'
 import { loadGameAccelConfig, patchGameAccelConfig } from './store'
 import { getGameAccelPreview, getGameAccelState, runGameAccelDiagnose } from './index'
 
@@ -136,7 +136,18 @@ export async function gameAccelAddFromPath(filePath: string): Promise<GameAccelA
 }
 
 export async function gameAccelScan(): Promise<GameCandidate[]> {
-  return scanGameCandidates()
+  const candidates = await scanGameCandidates()
+  for (const candidate of candidates.slice(0, 100)) {
+    try {
+      const target = candidate.executables[0] ?? candidate.directory
+      const image = await app.getFileIcon(target, { size: 'normal' })
+      if (!image.isEmpty()) candidate.icon = image.toDataURL()
+    } catch {
+      // Icon extraction is best-effort.
+    }
+  }
+  await saveGameScanCache(candidates).catch(() => undefined)
+  return candidates
 }
 
 export async function gameAccelGetLiveState(): Promise<GameAccelLiveState> {
