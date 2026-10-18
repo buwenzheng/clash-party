@@ -14,6 +14,7 @@ export const DEFAULT_SIDER_ORDER: SiderCardKey[] = [
   'sysproxy',
   'tun',
   'profile',
+  'game',
   'proxy',
   'rule',
   'resource',

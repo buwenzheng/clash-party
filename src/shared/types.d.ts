@@ -6,6 +6,7 @@ type SiderCardKey =
   | 'sysproxy'
   | 'tun'
   | 'profile'
+  | 'game'
   | 'proxy'
   | 'rule'
   | 'resource'

@@ -14,6 +14,7 @@ import { NavigateFunction, useNavigate } from 'react-router-dom'
 import SysproxySwitcher from '@renderer/components/sider/sysproxy-switcher'
 import TunSwitcher from '@renderer/components/sider/tun-switcher'
 import ProfileCard from '@renderer/components/sider/profile-card'
+import GameCard from '@renderer/components/sider/game-card'
 import ProxyCard from '@renderer/components/sider/proxy-card'
 import RuleCard from '@renderer/components/sider/rule-card'
 import DNSCard from '@renderer/components/sider/dns-card'
@@ -35,6 +36,7 @@ const componentMap: Record<SiderCardKey, React.FC<{ iconOnly?: boolean; expanded
   sysproxy: SysproxySwitcher,
   tun: TunSwitcher,
   profile: ProfileCard,
+  game: GameCard,
   proxy: ProxyCard,
   mihomo: MihomoCoreCard,
   connection: ConnCard,

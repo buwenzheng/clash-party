@@ -4,6 +4,7 @@ import { getSiderCardRoute } from '@renderer/utils/sider'
 import {
   Connections,
   DNS,
+  GameAccel,
   Logs,
   Mihomo,
   NetworkPageComponent,
@@ -96,6 +97,10 @@ const routes = [
   {
     path: '/profiles',
     element: <ProfilesRoute />
+  },
+  {
+    path: '/game-accel',
+    element: <GameAccel />
   },
   {
     path: '/settings',

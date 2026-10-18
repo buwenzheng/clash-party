@@ -6,6 +6,7 @@ export const SIDER_CARD_ROUTES: Record<SiderCardKey, string> = {
   sysproxy: '/sysproxy',
   tun: '/tun',
   profile: '/profiles',
+  game: '/game-accel',
   proxy: '/proxies',
   rule: '/rules',
   resource: '/resources',
@@ -25,7 +26,17 @@ export function mergeSiderOrder(saved: string[] = []): SiderCardKey[] {
     SIDER_CARD_KEYS.includes(key as SiderCardKey)
   )
   const missing = SIDER_CARD_KEYS.filter((key) => !valid.includes(key))
-  return [...valid, ...missing]
+  if (!missing.length) return valid
+  const merged = [...valid]
+  for (const key of missing) {
+    const defaultIndex = SIDER_CARD_KEYS.indexOf(key)
+    const next = SIDER_CARD_KEYS.slice(defaultIndex + 1).find((candidate) =>
+      merged.includes(candidate)
+    )
+    if (next) merged.splice(merged.indexOf(next), 0, key)
+    else merged.push(key)
+  }
+  return merged
 }
 
 export function getSiderCardRoute(card?: string): string {
