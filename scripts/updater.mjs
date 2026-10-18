@@ -20,10 +20,15 @@ const latest = {
 }
 
 // 使用统一的下载链接生成函数
-changelog += generateDownloadLinksMarkdown(downloadUrl, version)
-
-changelog +=
-  '\n\n### 机场推荐：\n- 高性能海外机场，稳定首选：[https://狗狗加速.com](https://party.dginv.click/#/register?code=ARdo0mXx)'
+const releasePlatforms = (process.env.FORK_RELEASE_PLATFORMS || '')
+  .split(',')
+  .map((item) => item.trim())
+  .filter(Boolean)
+changelog += generateDownloadLinksMarkdown(
+  downloadUrl,
+  version,
+  releasePlatforms.length ? releasePlatforms : null
+)
 
 writeFileSync('latest.yml', yaml.stringify(latest))
 writeFileSync('changelog.md', changelog)

@@ -12,6 +12,7 @@ import SiderConfig from '@renderer/components/settings/sider-config'
 import SubStoreConfig from '@renderer/components/settings/substore-config'
 import LocalBackupConfig from '@renderer/components/settings/local-backup-config'
 import { useTranslation } from 'react-i18next'
+import { FORK_REPO_URL } from '../../../shared/fork'
 
 const Settings: React.FC = () => {
   const { t } = useTranslation()
@@ -40,7 +41,7 @@ const Settings: React.FC = () => {
             className="app-nodrag"
             title={t('settings.links.github')}
             onPress={() => {
-              window.open('https://github.com/mihomo-party-org/mihomo-party')
+              window.open(FORK_REPO_URL)
             }}
           >
             <IoLogoGithub className="text-lg" />

@@ -1,0 +1,71 @@
+name: Release
+
+# Fork release pipeline. The upstream build.yml is removed; this workflow owns v* tags.
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: 'pnpm'
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Verify version
+        shell: pwsh
+        run: |
+          $pkgVersion = (Get-Content package.json -Raw | ConvertFrom-Json).version
+          $tagVersion = $env:GITHUB_REF_NAME -replace '^v',''
+          if ($pkgVersion -ne $tagVersion) {
+            throw "package.json version ($pkgVersion) does not match tag ($tagVersion)"
+          }
+          "VERSION=$pkgVersion" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+      - name: Prepare sidecars
+        run: pnpm prepare --x64
+      - name: Typecheck
+        run: pnpm run typecheck
+      - name: Unit tests
+        run: pnpm test
+      - name: Build Windows x64
+        run: pnpm build:win --x64
+      - name: Add portable marker
+        shell: pwsh
+        run: |
+          New-Item -Path "PORTABLE" -ItemType File -Force
+          Get-ChildItem dist/*portable.7z | ForEach-Object { 7z a $_.FullName PORTABLE }
+      - name: Generate checksums
+        run: pnpm checksum setup.exe portable.7z
+      - name: Generate latest.yml
+        env:
+          FORK_RELEASE_PLATFORMS: windows
+        run: pnpm updater
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: Clash Party ${{ github.ref_name }}
+          body_path: changelog.md
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          files: |
+            latest.yml
+            dist/*.sha256
+            dist/*setup.exe
+            dist/*portable.7z
+          token: ${{ secrets.GITHUB_TOKEN }}

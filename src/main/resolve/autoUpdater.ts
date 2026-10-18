@@ -15,13 +15,12 @@ import { DEFAULT_MIHOMO_PORTS } from '../../shared/appConfig'
 import { checkAdminPrivileges } from '../core/manager'
 import { parse } from '../utils/yaml'
 import * as chromeRequest from '../utils/chromeRequest'
+import { FORK_LATEST_YML_URL, FORK_REPO, forkReleaseDownloadUrl } from '../../shared/fork'
+import { compareVersions } from '../../shared/version'
 
-const GITHUB_PROXIES = [
-  'https://gh-proxy.org',
-  'https://ghfast.top',
-  'https://down.clashparty.org',
-  'https://download.mihomo.party'
-]
+// Generic GitHub mirrors only. The upstream project CDN is intentionally not used,
+// so fork updates do not depend on upstream infrastructure.
+const GITHUB_PROXIES = ['https://gh-proxy.org', 'https://ghfast.top']
 
 let updateInstallPromise: Promise<void> | undefined
 
@@ -77,7 +76,7 @@ async function getGitHubAssetSha256(
 ): Promise<string> {
   const releaseTag = encodeURIComponent(`v${version}`)
   const res = await chromeRequest.get<GitHubRelease>(
-    `https://api.github.com/repos/mihomo-party-org/mihomo-party/releases/tags/${releaseTag}`,
+    `https://api.github.com/repos/${FORK_REPO}/releases/tags/${releaseTag}`,
     {
       headers: {
         Accept: 'application/vnd.github+json',
@@ -99,8 +98,7 @@ async function getGitHubAssetSha256(
 export async function checkUpdate(): Promise<IAppVersion | undefined> {
   const [{ 'mixed-port': mixedPort = DEFAULT_MIHOMO_PORTS.mixed }, { githubProxy = '' }] =
     await Promise.all([getControledMihomoConfig(), getAppConfig()])
-  const githubUrl =
-    'https://github.com/mihomo-party-org/mihomo-party/releases/latest/download/latest.yml'
+  const githubUrl = FORK_LATEST_YML_URL
   const res = await tryDownload(buildDownloadUrls(githubUrl, githubProxy), {
     headers: { 'Content-Type': 'application/octet-stream' },
     proxy: updaterProxy(mixedPort),
@@ -119,23 +117,7 @@ export async function checkUpdate(): Promise<IAppVersion | undefined> {
   }
 }
 
-// 1:新 -1:旧 0:相同
-function compareVersions(a: string, b: string): number {
-  const parsePart = (part: string) => {
-    const numPart = part.split('-')[0]
-    const num = parseInt(numPart, 10)
-    return isNaN(num) ? 0 : num
-  }
-  const v1 = a.replace(/^v/, '').split('.').map(parsePart)
-  const v2 = b.replace(/^v/, '').split('.').map(parsePart)
-  for (let i = 0; i < Math.max(v1.length, v2.length); i++) {
-    const num1 = v1[i] || 0
-    const num2 = v2[i] || 0
-    if (num1 > num2) return 1
-    if (num1 < num2) return -1
-  }
-  return 0
-}
+// compareVersions lives in src/shared/version.ts so it can be tested without Electron.
 
 export function downloadAndInstallUpdate(version: string): Promise<void> {
   if (updateInstallPromise) return updateInstallPromise
@@ -150,7 +132,7 @@ export function downloadAndInstallUpdate(version: string): Promise<void> {
 async function installUpdate(version: string): Promise<void> {
   const [{ 'mixed-port': mixedPort = DEFAULT_MIHOMO_PORTS.mixed }, { githubProxy = '' }] =
     await Promise.all([getControledMihomoConfig(), getAppConfig()])
-  const githubBase = `https://github.com/mihomo-party-org/mihomo-party/releases/download/v${version}/`
+  const githubBase = forkReleaseDownloadUrl(version)
   const fileMap = {
     'win32-x64': `clash-party-windows-${version}-x64-setup.exe`,
     'win32-ia32': `clash-party-windows-${version}-ia32-setup.exe`,

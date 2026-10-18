@@ -6,6 +6,8 @@ on:
 
 jobs:
   review:
+    # Upstream-only automation. Forks do not have the bot/OpenAI secrets.
+    if: github.repository == 'mihomo-party-org/clash-party'
     runs-on: ubuntu-latest
     steps:
       - name: Generate Token

@@ -1,11 +1,15 @@
 {
   "name": "mihomo-party",
-  "version": "2.0.3",
+  "version": "2.1.0-rc.1",
   "description": "Clash Party",
   "type": "module",
   "main": "./out/main/index.js",
   "author": "mihomo-party-org",
   "homepage": "https://clashparty.org",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/buwenzheng/clash-party.git"
+  },
   "scripts": {
     "test": "vitest run",
     "test:watch": "vitest",
