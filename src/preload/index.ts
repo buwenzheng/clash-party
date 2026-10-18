@@ -1,4 +1,8 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
+import {
+  GAME_ACCEL_INVOKE_CHANNEL_LIST,
+  GAME_ACCEL_LISTEN_CHANNEL_LIST
+} from '../shared/game/ipc-channels'
 
 // 允许的 invoke channels 白名单
 const validInvokeChannels = [
@@ -192,7 +196,8 @@ const validInvokeChannels = [
   'measureLatency',
   'getImageDataURL',
   'getAppInfo',
-  'changeLanguage'
+  'changeLanguage',
+  ...GAME_ACCEL_INVOKE_CHANNEL_LIST
 ] as const
 
 // 允许的 on/removeListener channels 白名单
@@ -210,7 +215,8 @@ const validListenChannels = [
   'updateDownloadProgress',
   'pluginConfigUpdated',
   'openPluginFile',
-  'dnsOverrideAutoDisabled'
+  'dnsOverrideAutoDisabled',
+  ...GAME_ACCEL_LISTEN_CHANNEL_LIST
 ] as const
 
 // 允许的 send channels 白名单

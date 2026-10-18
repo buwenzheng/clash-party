@@ -27,6 +27,7 @@ import {
   mihomoSmartFlushCache,
   mihomoRulesDisable
 } from '../core/mihomoApi'
+import { gameAccelHandlers } from '../game/ipc'
 import { checkAutoRun, disableAutoRun, enableAutoRun } from '../sys/autoRun'
 import {
   getAppConfig,
@@ -261,6 +262,7 @@ async function setTitleBarOverlay(overlay: Electron.TitleBarOverlayOptions): Pro
 }
 
 const asyncHandlers: Record<string, AsyncFn> = {
+  ...gameAccelHandlers,
   // Mihomo API
   mihomoVersion,
   mihomoCloseConnection,

@@ -18,6 +18,7 @@ import {
   type SimpleState,
   type SimplePreview
 } from '../../shared/simple-config'
+import { finalizeGameYaml } from '../game'
 import { compileSimpleConfig, type SimpleSharedConfig } from './compiler'
 import { resolveSimpleDraft } from './subscriptions'
 import {
@@ -101,10 +102,12 @@ export async function compileAndWriteSimple(
     effectiveShared
   )
   if (result.errors.length) return result
+  // [game-accel] inject before writing simple mode output
+  const yaml = await finalizeGameYaml(result.yaml)
   await mkdir(mihomoWorkDir(), { recursive: true })
-  await atomicWriteFile(simpleOutputPath(), result.yaml, { encoding: 'utf8' })
-  await atomicWriteFile(mihomoWorkConfigPath('work'), result.yaml, { encoding: 'utf8' })
-  return result
+  await atomicWriteFile(simpleOutputPath(), yaml, { encoding: 'utf8' })
+  await atomicWriteFile(mihomoWorkConfigPath('work'), yaml, { encoding: 'utf8' })
+  return { ...result, yaml }
 }
 export async function commitSimpleState(
   state: SimpleState,
@@ -142,6 +145,8 @@ export async function commitSimpleState(
   }
   const result = compileSimpleConfig(await resolveSimpleDraft(next.published), shared)
   if (result.errors.length) return result
+  // [game-accel] candidate validation and applied config both need injected YAML
+  const yaml = await finalizeGameYaml(result.yaml)
   const [{ getAppConfig }, { checkProfileConfig }, { mihomoHotReloadConfig }] = await Promise.all([
     import('../config/app'),
     import('../core/manager'),
@@ -153,7 +158,7 @@ export async function commitSimpleState(
   const candidate = path.join(mihomoWorkDir(), '.simple-candidate.yaml')
   await mkdir(mihomoWorkDir(), { recursive: true })
   try {
-    await atomicWriteFile(candidate, result.yaml, { encoding: 'utf8' })
+    await atomicWriteFile(candidate, yaml, { encoding: 'utf8' })
     await checkProfileConfig(candidate, appConfig.core, undefined, {
       workDir: mihomoWorkDir(),
       timeoutMs: 30000
@@ -176,7 +181,7 @@ export async function commitSimpleState(
         window.webContents.send('rulesUpdated')
       }
     }
-    return result
+    return { ...result, yaml }
   } catch (error) {
     try {
       if (sharedChanged) await writeSimpleSharedConfig(previousShared)
@@ -185,10 +190,11 @@ export async function commitSimpleState(
     } catch (restoreError) {
       return {
         ...result,
-        errors: [`应用失败: ${String(error)}`, `恢复配置或内核失败: ${String(restoreError)}`]
+        errors: [`应用失败: ${String(error)}`, `恢复配置或内核失败: ${String(restoreError)}`],
+        yaml
       }
     }
-    return { ...result, errors: [`应用失败，已恢复原配置: ${String(error)}`] }
+    return { ...result, errors: [`应用失败，已恢复原配置: ${String(error)}`], yaml }
   }
 }
 

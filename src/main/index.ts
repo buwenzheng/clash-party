@@ -21,6 +21,7 @@ import { createTray } from './resolve/tray'
 import { init, initBasic, safeShowErrorBox, startSubStoreServices } from './utils/init'
 import { initShortcut } from './resolve/shortcut'
 import { initProfileUpdater } from './core/profileUpdater'
+import { initGameAccel } from './game'
 import { startMonitor } from './resolve/trafficMonitor'
 import { showFloatingWindow } from './resolve/floatingWindow'
 import { logger, createLogger } from './utils/logger'
@@ -353,6 +354,7 @@ app
               initProfileUpdater().catch((e) =>
                 mainLogger.warn('Failed to init profile updater', e)
               ),
+              initGameAccel().catch((e) => mainLogger.warn('Failed to init game acceleration', e)),
               initWebdavBackupScheduler().catch((e) =>
                 mainLogger.warn('Failed to init webdav backup scheduler', e)
               ),

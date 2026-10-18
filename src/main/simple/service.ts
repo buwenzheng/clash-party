@@ -18,6 +18,7 @@ import {
   type SimpleSource,
   type SimpleSubscriptionOptions
 } from '../../shared/simple-config'
+import { finalizeGameYaml } from '../game'
 import { cleanupSimpleDraft, removedSimpleResources } from './references'
 import {
   getSimpleState,
@@ -205,10 +206,13 @@ async function fetchSubscriptionProxies(url: string): Promise<Record<string, unk
 export async function previewSimpleConfig(): Promise<SimplePreview> {
   const state = await getSimpleState()
   const shared = await getSharedConfig()
-  return compileSimpleConfig(
+  const result = compileSimpleConfig(
     await resolveSimpleDraft(applySharedModules(state.draft, shared)),
     shared
   )
+  if (result.errors.length) return result
+  // [game-accel] preview must match the injected runtime config
+  return { ...result, yaml: await finalizeGameYaml(result.yaml) }
 }
 export async function getSimpleConfig() {
   await inheritStandardSubscriptions(true)

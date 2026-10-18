@@ -27,6 +27,7 @@ import { decryptAgeContent } from '../utils/age'
 import { DEFAULT_CONTROL_DNS, DEFAULT_CONTROL_SNIFF } from '../../shared/appConfig'
 import { atomicWriteFile } from '../utils/safeFile'
 import { compileSimpleRuntime } from '../simple/service'
+import { applyGameAccel } from '../game'
 import { evaluateDnsOverrideGuard, type DnsOverrideGuardResult } from './dnsOverrideGuard'
 
 const factoryLogger = createLogger('Factory')
@@ -206,7 +207,7 @@ export async function generateProfile(
     delete controledMihomoConfig?.dns?.['nameserver-policy']
   }
 
-  const profile = deepMerge(currentProfile, controledMihomoConfig)
+  let profile = deepMerge(currentProfile, controledMihomoConfig)
   // 关闭 DNS 覆写时，如果最终配置没有启用的 DNS 配置，清空 dns-hijack 避免请求被劫持但无法处理
   if (!controlDns && profile.tun && !profile.dns?.enable) {
     profile.tun = { ...profile.tun, 'dns-hijack': [] }
@@ -237,6 +238,9 @@ export async function generateProfile(
     delete partialProfile['external-ui']
     delete partialProfile['external-ui-url']
   }
+  // [game-accel] inject game rules after the final profile is assembled
+  profile = await applyGameAccel(profile)
+
   const nextRuntimeConfigStr = stringify(profile)
   const coreProfile = { ...profile }
   // 日志解析启动检测需要基础日志；预览和 Gist 保留用户的实际配置。
