@@ -76,7 +76,7 @@ export function gameAccelTrafficTop(limit = 10): Promise<GameTrafficTop[]> {
 
 export function gameAccelHandleGuardAlert(
   id: string,
-  action: 'direct' | 'proxy' | 'downloadMode' | 'ignored' | 'auto'
+  action: 'direct' | 'proxy' | 'ignored'
 ): Promise<GuardAlert | undefined> {
   return invoke(GAME_ACCEL_INVOKE_CHANNELS.handleGuardAlert, id, action)
 }

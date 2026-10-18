@@ -1,5 +1,9 @@
 import BasePage from '@renderer/components/base/base-page'
 import { toast } from '@renderer/components/base/toast'
+import NodePickerModal, {
+  type NodePickerItem,
+  type NodePickerSpecialOption
+} from '@renderer/components/game-accel/node-picker'
 import {
   Button,
   Card,
@@ -21,6 +25,7 @@ import { useGroups } from '@renderer/hooks/use-groups'
 import {
   gameAccelAddFromPath,
   gameAccelDiagnose,
+  gameAccelGetConfig,
   gameAccelGetLiveState,
   gameAccelGetPresets,
   gameAccelGetState,
@@ -33,7 +38,7 @@ import {
   gameAccelStartCapture,
   gameAccelStopCapture
 } from '@renderer/utils/game-accel-ipc'
-import { getFilePath, mihomoChangeProxy } from '@renderer/utils/ipc'
+import { getFilePath, mihomoChangeProxy, mihomoProxies } from '@renderer/utils/ipc'
 import React, { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { IoAdd, IoCheckmarkCircleOutline, IoTrashOutline, IoWarningOutline } from 'react-icons/io5'
@@ -61,6 +66,15 @@ const EMPTY_PLATFORM: PlatformSetting = {
   extraPlatform: [],
   removed: []
 }
+
+const SPECIAL_PROXY_NAMES = new Set([
+  'DIRECT',
+  'REJECT',
+  'REJECT-DROP',
+  'PASS',
+  'COMPATIBLE',
+  'GLOBAL'
+])
 
 function candidateKey(candidate: GameCandidate): string {
   return `${candidate.source}:${candidate.sourceId}`
@@ -99,8 +113,17 @@ const GroupCard: React.FC<GroupCardProps> = ({
   actions = [],
   onChange
 }) => {
+  const { t } = useTranslation()
   const [changing, setChanging] = useState(false)
+  const [pickerOpen, setPickerOpen] = useState(false)
   const group = groups?.find((item) => item.name === groupName)
+  const pickerItems: NodePickerItem[] = (group?.all ?? []).map((item) => ({
+    name: item.name,
+    kind: 'all' in item ? 'group' : 'node',
+    udp: 'all' in item ? undefined : item.udp,
+    provider: 'all' in item ? undefined : item['provider-name'],
+    history: item.history
+  }))
 
   return (
     <div data-testid={testId}>
@@ -113,26 +136,19 @@ const GroupCard: React.FC<GroupCardProps> = ({
             </Chip>
           </div>
           {group ? (
-            <Select
+            <Button
               size="sm"
-              aria-label={title}
-              selectedKeys={[group.now]}
+              variant="flat"
+              className="h-8 w-full justify-between px-2"
+              data-testid={`${testId}-picker`}
               isDisabled={disabled || changing}
-              onSelectionChange={async (selection) => {
-                const proxy = selection.currentKey
-                if (!proxy || proxy === group.now) return
-                setChanging(true)
-                try {
-                  await onChange(group.name, proxy)
-                } finally {
-                  setChanging(false)
-                }
-              }}
+              onPress={() => setPickerOpen(true)}
             >
-              {group.all.map((proxy) => (
-                <SelectItem key={proxy.name}>{proxy.name}</SelectItem>
-              ))}
-            </Select>
+              <span className="min-w-0 truncate">{group.now}</span>
+              <span className="shrink-0 text-tiny text-default-500">
+                {changing ? <Spinner size="sm" /> : t('gameAccel.chooseNode')}
+              </span>
+            </Button>
           ) : (
             <p className="text-tiny leading-5 text-default-500">{hint}</p>
           )}
@@ -153,6 +169,24 @@ const GroupCard: React.FC<GroupCardProps> = ({
           )}
         </CardBody>
       </Card>
+      {group && (
+        <NodePickerModal
+          isOpen={pickerOpen}
+          onOpenChange={setPickerOpen}
+          title={title}
+          items={pickerItems}
+          current={group.now}
+          onSelect={async (value) => {
+            if (value === group.now) return
+            setChanging(true)
+            try {
+              await onChange(group.name, value)
+            } finally {
+              setChanging(false)
+            }
+          }}
+        />
+      )}
     </div>
   )
 }
@@ -169,6 +203,10 @@ const GameAccel: React.FC = () => {
     { refreshInterval: 5000, revalidateOnFocus: false }
   )
   const { groups, mutate: mutateGroups } = useGroups()
+  const { data: proxyData, mutate: mutateProxyData } = useSWR('mihomoProxies', mihomoProxies, {
+    refreshInterval: 30000,
+    revalidateOnFocus: true
+  })
   const { data: presets } = useSWR('gameAccelGetPresets', gameAccelGetPresets, {
     revalidateOnFocus: false
   })
@@ -189,6 +227,7 @@ const GameAccel: React.FC = () => {
   const [live, setLive] = useState<GameAccelLiveState>()
   const [diagnostics, setDiagnostics] = useState<GameAccelDiagnostic[]>([])
   const [checking, setChecking] = useState(false)
+  const [policyPicker, setPolicyPicker] = useState<{ id: string; name: string }>()
 
   useEffect(() => {
     if (state && !dirty) setDraft(state.config)
@@ -198,9 +237,10 @@ const GameAccel: React.FC = () => {
     const unsubscribe = window.electron.ipcRenderer.on('gameAccelUpdated', () => {
       void mutateState()
       void mutateGroups()
+      void mutateProxyData()
     })
     return unsubscribe
-  }, [mutateState, mutateGroups])
+  }, [mutateState, mutateGroups, mutateProxyData])
 
   useEffect(() => {
     if (liveData) setLive(liveData)
@@ -230,16 +270,58 @@ const GameAccel: React.FC = () => {
   }
 
   const tunEnabled = controledMihomoConfig?.tun?.enable === true
-  const generatedNames = Object.values(draft.groupNames)
+  const compiledNames = state?.lastCompile?.groupNames
+  const effectiveGroupNames = {
+    game: compiledNames?.game || draft.groupNames.game,
+    platform: compiledNames?.platform || draft.groupNames.platform,
+    download: compiledNames?.download || draft.groupNames.download
+  }
+  const generatedNames = [...Object.values(draft.groupNames), ...Object.values(effectiveGroupNames)]
+  const isRegionGroupName = (name: string): boolean =>
+    Boolean(draft.groupNames.regionPrefix) && name.startsWith(draft.groupNames.regionPrefix)
   const upstreamNames = [
-    ...(draft.platformUpstream && !generatedNames.includes(draft.platformUpstream)
+    ...(draft.platformUpstream &&
+    !generatedNames.includes(draft.platformUpstream) &&
+    !isRegionGroupName(draft.platformUpstream)
       ? [draft.platformUpstream]
       : []),
     ...(groups ?? [])
       .map((group) => group.name)
-      .filter((name) => !generatedNames.includes(name) && name !== draft.platformUpstream)
+      .filter(
+        (name) =>
+          !generatedNames.includes(name) &&
+          name !== draft.platformUpstream &&
+          !isRegionGroupName(name)
+      )
   ]
   const upstreamOptions = upstreamNames.filter((name) => name !== 'auto')
+  const policyGroupNames = (groups ?? [])
+    .map((group) => group.name)
+    .filter((name) => name !== 'GLOBAL' && !generatedNames.includes(name))
+    .filter((name, index, values) => values.indexOf(name) === index)
+  const policyGroupSet = new Set(policyGroupNames)
+  const policyNodes = Object.values(proxyData?.proxies ?? {})
+    .filter((proxy): proxy is IMihomoProxy => !('all' in proxy))
+    .filter(
+      (proxy) =>
+        !SPECIAL_PROXY_NAMES.has(proxy.name) &&
+        !proxy['provider-name'] &&
+        !generatedNames.includes(proxy.name) &&
+        !policyGroupSet.has(proxy.name)
+    )
+    .filter(
+      (proxy, index, values) => values.findIndex((item) => item.name === proxy.name) === index
+    )
+    .map((proxy) => ({ name: proxy.name, udp: proxy.udp }))
+  const policyNodeNames = new Set(policyNodes.map((node) => node.name))
+  const policyPickerItems: NodePickerItem[] = [
+    ...policyGroupNames.map((name) => ({ name, kind: 'group' as const })),
+    ...policyNodes.map((node) => ({ name: node.name, kind: 'node' as const, udp: node.udp }))
+  ]
+  const policySpecialOptions: NodePickerSpecialOption[] = [
+    { value: 'inherit', label: t('gameAccel.policyInherit') },
+    { value: 'DIRECT', label: t('gameAccel.policyDirect') }
+  ]
 
   const update = (patch: Partial<GameAccelConfig>): void => {
     setDraft((current) => (current ? { ...current, ...patch } : current))
@@ -260,6 +342,20 @@ const GameAccel: React.FC = () => {
     update({
       games: draft.games.map((game) => (game.id === id ? { ...game, enable } : game))
     })
+  }
+
+  const updateGamePolicy = (id: string, policy: string): void => {
+    update({
+      games: draft.games.map((game) => (game.id === id ? { ...game, policy } : game))
+    })
+  }
+
+  const gamePolicyLabel = (policy: string | undefined): string => {
+    if (!policy || policy === 'inherit') return t('gameAccel.policyInherit')
+    if (policy === 'DIRECT') return t('gameAccel.policyDirect')
+    return policyGroupSet.has(policy) || policyNodeNames.has(policy)
+      ? policy
+      : `${policy} (${t('gameAccel.policyMissing')})`
   }
 
   const removeGame = (id: string): void => {
@@ -289,10 +385,10 @@ const GameAccel: React.FC = () => {
   }
 
   const isScanCandidateAdded = (candidate: GameCandidate): boolean => {
-    const directory = candidate.directory.toLowerCase()
+    const directory = candidate.directory.toLowerCase().replace(/\//g, '\\').replace(/\\+$/, '')
     return draft.games.some((game) =>
       [...game.match.directories, ...game.match.processPaths].some((value) => {
-        const normalized = value.toLowerCase()
+        const normalized = value.toLowerCase().replace(/\//g, '\\').replace(/\\+$/, '')
         return normalized === directory || normalized.startsWith(`${directory}\\`)
       })
     )
@@ -382,7 +478,18 @@ const GameAccel: React.FC = () => {
   const handleAlert = async (id: string, action: 'direct' | 'proxy' | 'ignored'): Promise<void> => {
     try {
       await gameAccelHandleGuardAlert(id, action)
-      await mutateLive()
+      const latest = await gameAccelGetConfig()
+      setDraft((current) =>
+        current
+          ? {
+              ...current,
+              customDirect: latest.customDirect,
+              customProxy: latest.customProxy,
+              guard: { ...current.guard, ignored: latest.guard.ignored }
+            }
+          : current
+      )
+      await Promise.all([mutateLive(), mutateState()])
     } catch (error) {
       toast.error(String(error))
     }
@@ -404,7 +511,7 @@ const GameAccel: React.FC = () => {
 
   const optimizeGameGroup = async (): Promise<void> => {
     try {
-      const best = await gameAccelOptimizeGroup(draft.groupNames.game)
+      const best = await gameAccelOptimizeGroup(effectiveGroupNames.game)
       if (!best) {
         toast.error(t('gameAccel.optimizeFailed'))
         return
@@ -696,45 +803,48 @@ const GameAccel: React.FC = () => {
               </div>
             )}
 
-            {live && live.alerts.length > 0 && (
+            {live && live.alerts.some((alert) => !alert.handled) && (
               <div className="flex flex-col gap-2">
                 <p className="text-small font-medium">{t('gameAccel.guardAlerts')}</p>
-                {live.alerts.slice(0, 5).map((alert) => (
-                  <div
-                    key={alert.id}
-                    className="flex flex-col gap-2 rounded-medium border border-warning/30 bg-warning/10 p-3 md:flex-row md:items-center"
-                  >
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-small font-medium">{alert.host}</p>
-                      <p className="truncate text-tiny text-default-500">
-                        {alert.process} · {formatBytes(alert.speed)}/s · {alert.chain.join(' → ')}
-                      </p>
+                {live.alerts
+                  .filter((alert) => !alert.handled)
+                  .slice(0, 5)
+                  .map((alert) => (
+                    <div
+                      key={alert.id}
+                      className="flex flex-col gap-2 rounded-medium border border-warning/30 bg-warning/10 p-3 md:flex-row md:items-center"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-small font-medium">{alert.host}</p>
+                        <p className="truncate text-tiny text-default-500">
+                          {alert.process} · {formatBytes(alert.speed)}/s · {alert.chain.join(' → ')}
+                        </p>
+                      </div>
+                      <div className="flex shrink-0 gap-1">
+                        <Button
+                          size="sm"
+                          variant="flat"
+                          onPress={() => void handleAlert(alert.id, 'direct')}
+                        >
+                          {t('gameAccel.markDirect')}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="flat"
+                          onPress={() => void handleAlert(alert.id, 'proxy')}
+                        >
+                          {t('gameAccel.markProxy')}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="light"
+                          onPress={() => void handleAlert(alert.id, 'ignored')}
+                        >
+                          {t('gameAccel.ignore')}
+                        </Button>
+                      </div>
                     </div>
-                    <div className="flex shrink-0 gap-1">
-                      <Button
-                        size="sm"
-                        variant="flat"
-                        onPress={() => void handleAlert(alert.id, 'direct')}
-                      >
-                        {t('gameAccel.markDirect')}
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="flat"
-                        onPress={() => void handleAlert(alert.id, 'proxy')}
-                      >
-                        {t('gameAccel.markProxy')}
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="light"
-                        onPress={() => void handleAlert(alert.id, 'ignored')}
-                      >
-                        {t('gameAccel.ignore')}
-                      </Button>
-                    </div>
-                  </div>
-                ))}
+                  ))}
               </div>
             )}
           </CardBody>
@@ -747,8 +857,8 @@ const GameAccel: React.FC = () => {
           <CardBody className="grid gap-3 p-4 md:grid-cols-3">
             <GroupCard
               testId="game-group-game"
-              title={draft.groupNames.game}
-              groupName={draft.groupNames.game}
+              title={effectiveGroupNames.game}
+              groupName={effectiveGroupNames.game}
               groups={groups}
               hint={t('gameAccel.groupPending')}
               actions={[{ label: t('gameAccel.optimize'), onPress: optimizeGameGroup }]}
@@ -756,8 +866,8 @@ const GameAccel: React.FC = () => {
             />
             <GroupCard
               testId="game-group-platform"
-              title={draft.groupNames.platform}
-              groupName={draft.groupNames.platform}
+              title={effectiveGroupNames.platform}
+              groupName={effectiveGroupNames.platform}
               groups={groups}
               hint={t('gameAccel.groupPending')}
               actions={[
@@ -768,8 +878,8 @@ const GameAccel: React.FC = () => {
             />
             <GroupCard
               testId="game-group-download"
-              title={draft.groupNames.download}
-              groupName={draft.groupNames.download}
+              title={effectiveGroupNames.download}
+              groupName={effectiveGroupNames.download}
               groups={groups}
               hint={t('gameAccel.groupPending')}
               disabled={!draft.downloadViaProxy}
@@ -832,35 +942,55 @@ const GameAccel: React.FC = () => {
                   <div
                     key={game.id}
                     data-testid={`game-item-${game.id}`}
-                    className="flex items-center gap-3 rounded-medium border border-default-200 p-3"
+                    className="flex flex-col gap-2 rounded-medium border border-default-200 p-3"
                   >
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate font-medium">{game.name}</p>
-                      <p className="text-tiny text-default-500 truncate">
-                        {game.match.processPaths[0] ??
-                          game.match.directories[0] ??
-                          game.match.processNames[0] ??
-                          '—'}
-                      </p>
+                    <div className="flex items-center gap-3">
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate font-medium">{game.name}</p>
+                        <p className="truncate text-tiny text-default-500">
+                          {game.match.processPaths[0] ??
+                            game.match.directories[0] ??
+                            game.match.processNames[0] ??
+                            '—'}
+                        </p>
+                      </div>
+                      <Chip size="sm" variant="flat">
+                        {game.source === 'manual' ? t('gameAccel.manualSource') : game.source}
+                      </Chip>
+                      <Switch
+                        aria-label={game.name}
+                        isSelected={game.enable}
+                        onValueChange={(enable) => updateGame(game.id, enable)}
+                      />
+                      <Button
+                        isIconOnly
+                        size="sm"
+                        variant="light"
+                        color="danger"
+                        aria-label={t('common.delete')}
+                        onPress={() => removeGame(game.id)}
+                      >
+                        <IoTrashOutline />
+                      </Button>
                     </div>
-                    <Chip size="sm" variant="flat">
-                      {game.source === 'manual' ? t('gameAccel.manualSource') : game.source}
-                    </Chip>
-                    <Switch
-                      aria-label={game.name}
-                      isSelected={game.enable}
-                      onValueChange={(enable) => updateGame(game.id, enable)}
-                    />
-                    <Button
-                      isIconOnly
-                      size="sm"
-                      variant="light"
-                      color="danger"
-                      aria-label={t('common.delete')}
-                      onPress={() => removeGame(game.id)}
-                    >
-                      <IoTrashOutline />
-                    </Button>
+                    <div className="flex flex-wrap items-center gap-2 border-t border-default-100 pt-2">
+                      <span className="text-tiny text-default-500">
+                        {t('gameAccel.gamePolicy')}
+                      </span>
+                      <Button
+                        size="sm"
+                        variant="flat"
+                        className="h-8 min-w-0 flex-1 justify-between px-2"
+                        data-testid={`game-policy-${game.id}`}
+                        aria-label={t('gameAccel.gamePolicy')}
+                        onPress={() => setPolicyPicker({ id: game.id, name: game.name })}
+                      >
+                        <span className="min-w-0 truncate">{gamePolicyLabel(game.policy)}</span>
+                        <span className="shrink-0 text-tiny text-default-500">
+                          {t('gameAccel.chooseNode')}
+                        </span>
+                      </Button>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -868,6 +998,20 @@ const GameAccel: React.FC = () => {
           </CardBody>
         </Card>
       </div>
+
+      {policyPicker && (
+        <NodePickerModal
+          isOpen
+          onOpenChange={(open) => {
+            if (!open) setPolicyPicker(undefined)
+          }}
+          title={`${t('gameAccel.gamePolicy')}: ${policyPicker.name}`}
+          items={policyPickerItems}
+          specialOptions={policySpecialOptions}
+          current={draft.games.find((game) => game.id === policyPicker.id)?.policy || 'inherit'}
+          onSelect={(value) => updateGamePolicy(policyPicker.id, value)}
+        />
+      )}
 
       <Modal
         isOpen={onboardingOpen}

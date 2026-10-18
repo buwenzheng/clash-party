@@ -31,6 +31,13 @@ describe('migrateGameAccelConfig', () => {
     expect(config.games[0].antiCheat).toEqual({ eac: 'follow', vanguard: 'direct' })
   })
 
+  it('keeps a pending global restore marker even without the previous selection', () => {
+    const config = migrateGameAccelConfig({
+      pendingGlobalRestore: { mode: 'rule', gameId: 'apex' }
+    })
+    expect(config.pendingGlobalRestore).toEqual({ mode: 'rule', gameId: 'apex' })
+  })
+
   it('keeps explicit values and drops invalid games', () => {
     const config = migrateGameAccelConfig({
       enable: true,

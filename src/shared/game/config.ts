@@ -180,8 +180,8 @@ function normalizePendingGlobalRestore(
   const mode = raw.mode
   const global = asString(raw.global).trim()
   const gameId = asString(raw.gameId).trim()
-  if ((mode === 'rule' || mode === 'global' || mode === 'direct') && global && gameId) {
-    return { mode, global, gameId }
+  if ((mode === 'rule' || mode === 'global' || mode === 'direct') && gameId) {
+    return { mode, ...(global ? { global } : {}), gameId }
   }
   return undefined
 }

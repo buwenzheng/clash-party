@@ -9,7 +9,7 @@ import type {
   GeneratedSummary
 } from '../../shared/game/types'
 import { compileGameAccel } from './compiler'
-import { restorePendingGlobal } from './live'
+import { restorePendingGlobal, setGeneratedGroupNames, setGeneratedRules } from './live'
 import { getAntiCheatPreset, listBuiltinPresets } from './presets'
 import { loadGameAccelConfig } from './store'
 
@@ -48,6 +48,8 @@ export async function applyGameAccel(profile: IMihomoConfig): Promise<IMihomoCon
     if (!config.enable) {
       lastSummary = undefined
       lastDiagnostics = []
+      setGeneratedGroupNames(undefined)
+      setGeneratedRules(undefined)
       return profile
     }
     const result = compileGameAccel({
@@ -59,6 +61,8 @@ export async function applyGameAccel(profile: IMihomoConfig): Promise<IMihomoCon
     })
     lastSummary = result.summary
     lastDiagnostics = result.diagnostics
+    setGeneratedGroupNames(result.summary.groupNames.game ? result.summary.groupNames : undefined)
+    setGeneratedRules(result.summary.rules)
     return result.profile
   } catch (error) {
     logger.warn('Failed to apply game acceleration', error)
@@ -83,22 +87,27 @@ export async function finalizeGameYaml(yaml: string): Promise<string> {
 }
 
 function stripGeneratedGroups(profile: IMihomoConfig, config: GameAccelConfig): IMihomoConfig {
-  const names = new Set([
-    config.groupNames.game,
-    config.groupNames.platform,
-    config.groupNames.download
-  ])
+  // Prefer the exact names from the last compile: the bare configured names may belong to
+  // subscription groups when a name conflict forced the compiler to append a suffix.
+  const summaryGroups = lastSummary?.groups ?? []
+  const names = new Set(
+    summaryGroups.length
+      ? summaryGroups
+      : [config.groupNames.game, config.groupNames.platform, config.groupNames.download]
+  )
   const next = structuredClone(profile) as unknown as Record<string, unknown>
   const groups = Array.isArray(next['proxy-groups'])
     ? (next['proxy-groups'] as { name?: string }[])
     : []
-  next['proxy-groups'] = groups.filter(
-    (group) =>
-      !group.name ||
-      (!names.has(group.name) && !group.name.startsWith(config.groupNames.regionPrefix))
-  )
+  next['proxy-groups'] = groups.filter((group) => {
+    if (!group.name) return true
+    if (names.has(group.name)) return false
+    return summaryGroups.length > 0 || !group.name.startsWith(config.groupNames.regionPrefix)
+  })
+  const generatedRules = new Set(lastSummary?.rules.map((item) => item.rule) ?? [])
   const rules = Array.isArray(next.rules) ? (next.rules as string[]) : []
   next.rules = rules.filter((rule) => {
+    if (generatedRules.has(rule)) return false
     const target = rule.split(',').at(-1)
     return !target || !names.has(target)
   })
@@ -161,7 +170,10 @@ export async function runGameAccelDiagnose(): Promise<GameAccelDiagnostic[]> {
       message: 'find-process-mode is off; process matching may fail.'
     })
   }
-  if (!profile.proxies?.length) {
+  const providerCount = Object.keys(
+    (profile as unknown as { 'proxy-providers'?: Record<string, unknown> })['proxy-providers'] ?? {}
+  ).length
+  if (!profile.proxies?.length && providerCount === 0) {
     diagnostics.push({
       level: 'error',
       code: 'NO_PROXIES',
@@ -172,11 +184,12 @@ export async function runGameAccelDiagnose(): Promise<GameAccelDiagnostic[]> {
   const groups = Array.isArray(profile['proxy-groups'])
     ? (profile['proxy-groups'] as { name?: string }[])
     : []
-  for (const name of [
-    state.config.groupNames.game,
-    state.config.groupNames.platform,
-    state.config.groupNames.download
-  ]) {
+  const groupNames = {
+    game: lastSummary?.groupNames.game || state.config.groupNames.game,
+    platform: lastSummary?.groupNames.platform || state.config.groupNames.platform,
+    download: lastSummary?.groupNames.download || state.config.groupNames.download
+  }
+  for (const name of [groupNames.game, groupNames.platform, groupNames.download]) {
     if (!groups.some((group) => group.name === name)) {
       diagnostics.push({
         level: 'error',

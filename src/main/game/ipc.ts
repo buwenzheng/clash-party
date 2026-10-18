@@ -39,7 +39,13 @@ import {
 } from './live'
 import { listBuiltinPresets, mergePlatformPreset } from './presets'
 import { scanGameCandidates, saveGameScanCache } from './scan'
-import { loadGameAccelConfig, patchGameAccelConfig } from './store'
+import {
+  addDirectDomains,
+  ignoreGuardHost,
+  loadGameAccelConfig,
+  mutateGameAccelConfig,
+  patchGameAccelConfig
+} from './store'
 import { getGameAccelPreview, getGameAccelState, runGameAccelDiagnose } from './index'
 
 function notifyUpdated(): void {
@@ -176,34 +182,51 @@ export async function gameAccelMarkHost(host: string, action: 'direct' | 'proxy'
   if (!isValidDomain(host)) throw new Error('Invalid host')
   const domain = normalizeDomain(host)
   if (!domain) throw new Error('Invalid host')
-  const config = await loadGameAccelConfig()
-  const customDirect = config.customDirect.filter((entry) => entry.value !== domain)
-  const customProxy = config.customProxy.filter((entry) => entry !== domain)
   if (action === 'direct') {
-    customDirect.push({ value: domain, kind: 'domain', origin: 'user', addedAt: Date.now() })
+    await addDirectDomains([domain], 'user')
   } else {
-    customProxy.push(domain)
+    await mutateGameAccelConfig((current) => ({
+      ...current,
+      customDirect: current.customDirect.filter((entry) => entry.value !== domain),
+      customProxy: [
+        ...new Set([...current.customProxy.filter((value) => value !== domain), domain])
+      ]
+    }))
   }
-  await patchGameAccelConfig({ customDirect, customProxy })
   await mihomoHotReloadConfig()
   notifyUpdated()
 }
 
 export async function gameAccelHandleGuardAlert(
   id: string,
-  action: 'direct' | 'proxy' | 'downloadMode' | 'ignored' | 'auto'
+  action: 'direct' | 'proxy' | 'ignored'
 ): Promise<GuardAlert | undefined> {
-  const alert = markGuardAlertHandled(id, action)
-  if (!alert) return undefined
+  const current = getGuardAlerts().find((alert) => alert.id === id)
+  if (!current || current.handled) return current
   if (action === 'direct' || action === 'proxy') {
-    await gameAccelMarkHost(alert.host, action)
+    await gameAccelMarkHost(current.host, action)
+  } else {
+    const domain = normalizeDomain(current.host) || current.host.trim().toLowerCase()
+    if (domain) await ignoreGuardHost(domain)
+    notifyUpdated()
   }
-  return alert
+  return markGuardAlertHandled(id, action) ?? current
+}
+
+function resolveGroupName(
+  state: Awaited<ReturnType<typeof getGameAccelState>>,
+  kind: 'game' | 'platform' | 'download',
+  requested?: string
+): string {
+  const configured = state.config.groupNames[kind]
+  const compiled = state.lastCompile?.groupNames[kind]
+  if (!requested) return compiled || configured
+  return requested === configured ? compiled || requested : requested
 }
 
 export async function gameAccelOptimizeGroup(groupName: string): Promise<string | undefined> {
-  const config = await loadGameAccelConfig()
-  const target = groupName || config.groupNames.game
+  const state = await getGameAccelState()
+  const target = resolveGroupName(state, 'game', groupName)
   if (!target) throw new Error('Group name is required')
   const groups = await mihomoGroups()
   const group = groups.find((item) => item.name === target)
@@ -224,14 +247,14 @@ export async function gameAccelOptimizeGroup(groupName: string): Promise<string 
 }
 
 export async function gameAccelSetPlatformDirect(): Promise<void> {
-  const config = await loadGameAccelConfig()
-  await mihomoChangeProxy(config.groupNames.platform, 'DIRECT')
+  const state = await getGameAccelState()
+  await mihomoChangeProxy(resolveGroupName(state, 'platform'), 'DIRECT')
 }
 
 export async function gameAccelRestoreAuto(): Promise<void> {
-  const config = await loadGameAccelConfig()
+  const state = await getGameAccelState()
   try {
-    await mihomoUnfixedProxy(config.groupNames.platform)
+    await mihomoUnfixedProxy(resolveGroupName(state, 'platform'))
   } catch (error) {
     if (!isBodyInvalidError(error)) throw error
   }
@@ -242,7 +265,10 @@ export async function gameAccelGetConfig(): Promise<GameAccelConfig> {
 }
 
 export async function gameAccelPatchConfig(patch: GameAccelConfigPatch): Promise<void> {
-  await patchGameAccelConfig(patch)
+  // pendingGlobalRestore is owned by the main process; never let a stale renderer draft erase it.
+  const safePatch = { ...patch }
+  delete safePatch.pendingGlobalRestore
+  await patchGameAccelConfig(safePatch)
   await mihomoHotReloadConfig()
   notifyUpdated()
 }
@@ -255,23 +281,26 @@ export async function gameAccelSetEnable(enable: boolean): Promise<GameAccelDiag
 }
 
 export async function gameAccelUpsertGame(game: GameItem): Promise<void> {
-  const config = await loadGameAccelConfig()
-  const games = [...config.games]
-  const index = games.findIndex((item) => item.id === game.id)
   const now = Date.now()
-  if (index >= 0) {
-    games[index] = { ...game, createdAt: games[index].createdAt, updatedAt: now }
-  } else {
-    games.push({ ...game, createdAt: game.createdAt || now, updatedAt: now })
-  }
-  await patchGameAccelConfig({ games })
+  await mutateGameAccelConfig((current) => {
+    const games = [...current.games]
+    const index = games.findIndex((item) => item.id === game.id)
+    if (index >= 0) {
+      games[index] = { ...game, createdAt: games[index].createdAt, updatedAt: now }
+    } else {
+      games.push({ ...game, createdAt: game.createdAt || now, updatedAt: now })
+    }
+    return { ...current, games }
+  })
   await mihomoHotReloadConfig()
   notifyUpdated()
 }
 
 export async function gameAccelRemoveGame(id: string): Promise<void> {
-  const config = await loadGameAccelConfig()
-  await patchGameAccelConfig({ games: config.games.filter((game) => game.id !== id) })
+  await mutateGameAccelConfig((current) => ({
+    ...current,
+    games: current.games.filter((game) => game.id !== id)
+  }))
   await mihomoHotReloadConfig()
   notifyUpdated()
 }

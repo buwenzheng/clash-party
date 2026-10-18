@@ -51,16 +51,20 @@ export async function loadGameAccelConfig(): Promise<GameAccelConfig> {
   }
 }
 
-export async function saveGameAccelConfig(config: GameAccelConfig): Promise<void> {
-  await configWriteQueue.run(async () => {
-    await mkdir(dataDir(), { recursive: true })
-    await atomicWriteFile(gameAccelConfigPath(), stringify(config), { encoding: 'utf8' })
-  })
+async function writeGameAccelConfig(config: GameAccelConfig): Promise<void> {
+  await mkdir(dataDir(), { recursive: true })
+  await atomicWriteFile(gameAccelConfigPath(), stringify(config), { encoding: 'utf8' })
 }
 
-export async function patchGameAccelConfig(patch: GameAccelConfigPatch): Promise<GameAccelConfig> {
-  const current = await loadGameAccelConfig()
-  const next: GameAccelConfig = {
+export async function saveGameAccelConfig(config: GameAccelConfig): Promise<void> {
+  await configWriteQueue.run(() => writeGameAccelConfig(config))
+}
+
+function mergeGameAccelConfig(
+  current: GameAccelConfig,
+  patch: GameAccelConfigPatch
+): GameAccelConfig {
+  return {
     ...current,
     ...patch,
     groupNames: patch.groupNames
@@ -77,6 +81,51 @@ export async function patchGameAccelConfig(patch: GameAccelConfigPatch): Promise
       : current.guard,
     session: patch.session ? { ...current.session, ...patch.session } : current.session
   }
-  await saveGameAccelConfig(next)
-  return next
+}
+
+/** Read-modify-write helper: the whole mutation runs inside the write queue. */
+export async function mutateGameAccelConfig(
+  mutate: (current: GameAccelConfig) => GameAccelConfig | Promise<GameAccelConfig>
+): Promise<GameAccelConfig> {
+  return configWriteQueue.run(async () => {
+    const current = await loadGameAccelConfig()
+    const next = await mutate(current)
+    await writeGameAccelConfig(next)
+    return next
+  })
+}
+
+export async function patchGameAccelConfig(patch: GameAccelConfigPatch): Promise<GameAccelConfig> {
+  return mutateGameAccelConfig((current) => mergeGameAccelConfig(current, patch))
+}
+
+export async function addDirectDomains(
+  domains: string[],
+  origin: 'user' | 'guard' = 'user'
+): Promise<GameAccelConfig> {
+  const normalized = [...new Set(domains)]
+  return mutateGameAccelConfig((current) => {
+    const targets = new Set(normalized)
+    const customDirect = current.customDirect.filter(
+      (entry) => entry.kind !== 'domain' || !targets.has(entry.value)
+    )
+    for (const value of normalized) {
+      customDirect.push({ value, kind: 'domain', origin, addedAt: Date.now() })
+    }
+    return {
+      ...current,
+      customDirect,
+      customProxy: current.customProxy.filter((value) => !targets.has(value))
+    }
+  })
+}
+
+export async function ignoreGuardHost(host: string): Promise<GameAccelConfig> {
+  return mutateGameAccelConfig((current) => ({
+    ...current,
+    guard: {
+      ...current.guard,
+      ignored: [...new Set([...current.guard.ignored, host])]
+    }
+  }))
 }

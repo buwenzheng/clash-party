@@ -99,7 +99,13 @@ const KNOWN_GEOSITE = new Set([
 ])
 
 function emptySummary(): GeneratedSummary {
-  return { groups: [], rules: [], ruleProviders: [], tunPatches: [] }
+  return {
+    groupNames: { game: '', platform: '', download: '' },
+    groups: [],
+    rules: [],
+    ruleProviders: [],
+    tunPatches: []
+  }
 }
 
 function unique(values: string[]): string[] {
@@ -139,7 +145,6 @@ function ensureUniqueName(base: string, used: Set<string>): string {
 function detectPlatformUpstream(
   profile: GameAccelProfile,
   config: GameAccelConfig,
-  gameGroup: string,
   diagnostics: GameAccelDiagnostic[]
 ): string {
   const groups = profile['proxy-groups'] ?? []
@@ -178,9 +183,9 @@ function detectPlatformUpstream(
   diagnostics.push({
     level: 'warning',
     code: 'PLATFORM_UPSTREAM_NOT_FOUND',
-    message: 'No subscription proxy group found, platform group falls back to game group'
+    message: 'No subscription proxy group found, platform group falls back to DIRECT'
   })
-  return gameGroup
+  return 'DIRECT'
 }
 
 function regionHasMatches(
@@ -197,11 +202,14 @@ function regionHasMatches(
     diagnostics.push({
       level: 'warning',
       code: 'REGION_FILTER_INVALID',
-      message: 'Region filter is not a valid regular expression, keeping the region',
+      message: 'Region filter is not a valid regular expression, skipping the region',
       params: { filter }
     })
-    return true
+    return false
   }
+  // Provider nodes are only known at runtime; keep the region group and let mihomo apply
+  // the filter instead of incorrectly reporting the region as empty.
+  if (getProxyProviders(profile).length > 0) return true
   const names = [
     ...(profile.proxies ?? []).map((proxy) => proxy.name),
     ...(profile['proxy-groups'] ?? []).map((group) => group.name)
@@ -235,7 +243,7 @@ function buildContext(
     sanitizeGroupName(config.groupNames.download, '⬇️ 游戏下载', diagnostics),
     usedNames
   )
-  const platformUpstream = detectPlatformUpstream(profile, config, gameGroup, diagnostics)
+  const platformUpstream = detectPlatformUpstream(profile, config, diagnostics)
 
   const enabledPresets = Object.entries(config.platforms)
     .filter(([, setting]) => setting.enable)
@@ -306,12 +314,14 @@ function buildGroups(
   context: CompileContext
 ): MihomoProxyGroup[] {
   const groups: MihomoProxyGroup[] = []
+  const providerNames = getProxyProviders(profile)
 
   for (const region of context.regionGroups) {
     groups.push({
       name: region.name,
       type: 'url-test',
       'include-all-proxies': true,
+      ...(providerNames.length ? { use: providerNames } : {}),
       ...(region.filter ? { filter: region.filter } : {}),
       url: GAME_ACCEL_DEFAULT_TEST_URL,
       lazy: true,
@@ -321,9 +331,13 @@ function buildGroups(
   }
 
   const udpProxyNames = (profile.proxies ?? []).filter(isUdpCapable).map((proxy) => proxy.name)
-  const providerNames = getProxyProviders(profile)
   const regionNames = context.regionGroups.map((region) => region.name)
   const gameProxies = unique([...regionNames, ...udpProxyNames, context.platformUpstream, 'DIRECT'])
+  const hasStaticProxies = (profile.proxies ?? []).length > 0
+  const defaultGameSelected =
+    providerNames.length > 0 && !hasStaticProxies
+      ? context.platformUpstream
+      : (regionNames[0] ?? context.platformUpstream)
 
   groups.push({
     name: context.gameGroup,
@@ -331,13 +345,23 @@ function buildGroups(
     proxies: gameProxies,
     ...(providerNames.length ? { use: providerNames } : {}),
     'exclude-type': 'Http',
-    'default-selected': regionNames[0] ?? context.platformUpstream
+    'default-selected': defaultGameSelected
   })
 
+  const platformProxies = unique([
+    context.platformUpstream,
+    context.gameGroup,
+    ...[...context.proxyGroupNames].filter(
+      (name) => name !== context.platformGroup && name !== context.downloadGroup
+    ),
+    ...context.proxyNames,
+    'DIRECT'
+  ])
   groups.push({
     name: context.platformGroup,
     type: 'select',
-    proxies: unique([context.platformUpstream, context.gameGroup, 'DIRECT']),
+    proxies: platformProxies,
+    ...(providerNames.length ? { use: providerNames } : {}),
     'default-selected': context.platformUpstream
   })
 
@@ -358,6 +382,18 @@ function resolveGamePolicy(
 ): string {
   if (!game.policy || game.policy === 'inherit') return context.gameGroup
   if (game.policy === 'DIRECT') return 'DIRECT'
+  if (/[\r\n,]/.test(game.policy)) {
+    diagnostics.push({
+      level: 'warning',
+      code: 'GAME_POLICY_INVALID',
+      message: 'Game policy name contains a comma or newline',
+      params: { game: game.name, policy: game.policy }
+    })
+    return context.gameGroup
+  }
+  if (context.regionGroups.some((region) => region.name === game.policy)) {
+    return game.policy
+  }
   if (context.proxyNames.has(game.policy) || context.proxyGroupNames.has(game.policy)) {
     return game.policy
   }
@@ -778,6 +814,11 @@ export function compileGameAccel(input: CompileGameAccelInput): CompileGameAccel
       diagnostics
     )
     const groups = buildGroups(profile, input.config, context)
+    summary.groupNames = {
+      game: context.gameGroup,
+      platform: context.platformGroup,
+      download: context.downloadGroup
+    }
     summary.groups = groups.map((group) => group.name)
     const rules = buildRules(input.config, context, input.platform, diagnostics, summary)
 

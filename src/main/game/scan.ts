@@ -1,7 +1,8 @@
-import { mkdir, readFile, readdir, stat, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, readdir, stat } from 'node:fs/promises'
 import path from 'node:path'
 import { GAME_ACCEL_LOG_SCOPE } from '../../shared/game/constants'
 import type { GameCandidate, GameSource } from '../../shared/game/types'
+import { atomicWriteFile } from '../utils/safeFile'
 import { createLogger } from '../utils/logger'
 import { gameAccelCachePath } from './store'
 
@@ -36,7 +37,7 @@ function steamRoots(): string[] {
   ]
     .filter((value): value is string => Boolean(value))
     .map((value) => path.join(value, 'Steam'))
-  roots.push('C:\\Steam')
+  if (process.platform === 'win32') roots.push('C:\\Steam')
   return [...new Set(roots.map((value) => path.resolve(value)))]
 }
 
@@ -149,24 +150,31 @@ function dedupe(candidates: GameCandidate[]): GameCandidate[] {
 }
 
 async function scanKnownFolders(): Promise<GameCandidate[]> {
-  const programFiles = process.env.ProgramFiles ?? ''
-  const programFilesX86 = process.env['ProgramFiles(x86)'] ?? ''
-  const roots: { source: GameSource; root: string }[] = [
-    { source: 'gog', root: 'C:\\GOG Games' },
-    { source: 'gog', root: path.join(programFilesX86, 'GOG Galaxy', 'Games') },
-    { source: 'gog', root: path.join(programFiles, 'GOG Galaxy', 'Games') },
-    {
-      source: 'ubisoft',
-      root: path.join(programFilesX86, 'Ubisoft', 'Ubisoft Game Launcher', 'games')
-    },
-    {
-      source: 'ubisoft',
-      root: path.join(programFiles, 'Ubisoft', 'Ubisoft Game Launcher', 'games')
-    },
-    { source: 'ea', root: path.join(programFiles, 'EA Games') },
-    { source: 'ea', root: path.join(programFilesX86, 'Origin Games') },
-    { source: 'ea', root: path.join(programFiles, 'Electronic Arts') }
-  ]
+  if (process.platform !== 'win32') return []
+  const programFiles = process.env.ProgramFiles
+  const programFilesX86 = process.env['ProgramFiles(x86)']
+  const roots: { source: GameSource; root: string }[] = [{ source: 'gog', root: 'C:\\GOG Games' }]
+  if (programFilesX86) {
+    roots.push(
+      { source: 'gog', root: path.join(programFilesX86, 'GOG Galaxy', 'Games') },
+      {
+        source: 'ubisoft',
+        root: path.join(programFilesX86, 'Ubisoft', 'Ubisoft Game Launcher', 'games')
+      },
+      { source: 'ea', root: path.join(programFilesX86, 'Origin Games') }
+    )
+  }
+  if (programFiles) {
+    roots.push(
+      { source: 'gog', root: path.join(programFiles, 'GOG Galaxy', 'Games') },
+      {
+        source: 'ubisoft',
+        root: path.join(programFiles, 'Ubisoft', 'Ubisoft Game Launcher', 'games')
+      },
+      { source: 'ea', root: path.join(programFiles, 'EA Games') },
+      { source: 'ea', root: path.join(programFiles, 'Electronic Arts') }
+    )
+  }
   const candidates: GameCandidate[] = []
   for (const { source, root } of roots) {
     if (!root || !(await isDirectory(root))) continue
@@ -189,10 +197,10 @@ async function scanKnownFolders(): Promise<GameCandidate[]> {
 
 export async function saveGameScanCache(candidates: GameCandidate[]): Promise<void> {
   await mkdir(path.dirname(gameAccelCachePath()), { recursive: true })
-  await writeFile(
+  await atomicWriteFile(
     gameAccelCachePath(),
     `${JSON.stringify({ version: 1, scannedAt: Date.now(), candidates }, null, 2)}\n`,
-    'utf8'
+    { encoding: 'utf8' }
   )
 }
 
@@ -202,11 +210,6 @@ export async function scanGameCandidates(): Promise<GameCandidate[]> {
     ...(await scanEpic()),
     ...(await scanKnownFolders())
   ])
-  try {
-    await saveGameScanCache(candidates)
-  } catch (error) {
-    logger.warn('Failed to write game scan cache', error)
-  }
   logger.info(`Game scan finished, candidates=${candidates.length}`)
   return candidates
 }

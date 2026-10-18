@@ -138,6 +138,74 @@ describe('compileGameAccel', () => {
     )
   })
 
+  it('accepts a generated region group as a per-game policy', () => {
+    const config = createConfig()
+    config.games[0].policy = '🎮 区域·香港'
+    const result = compile(baseProfile, config)
+    const rules = result.profile.rules as unknown as string[]
+    expect(rules).toContain('DOMAIN-SUFFIX,apex.com,🎮 区域·香港')
+    expect(result.diagnostics.some((item) => item.code === 'GAME_POLICY_NOT_FOUND')).toBe(false)
+  })
+
+  it('rejects policy names containing rule separators', () => {
+    const config = createConfig()
+    config.games[0].policy = '节点,注入'
+    const result = compile(baseProfile, config)
+    const rules = result.profile.rules as unknown as string[]
+    expect(result.diagnostics.some((item) => item.code === 'GAME_POLICY_INVALID')).toBe(true)
+    expect(rules.some((rule) => rule.includes('节点,注入'))).toBe(false)
+  })
+
+  it('does not create a self-referencing group without an upstream', () => {
+    const profile = {
+      ...baseProfile,
+      proxies: [],
+      'proxy-groups': [],
+      rules: ['MATCH,DIRECT']
+    } as unknown as MihomoConfig
+    const result = compile(profile)
+    const groups = result.profile['proxy-groups'] as unknown as GroupLike[]
+    const game = groups.find((group) => group.name === '🎮 游戏加速')
+    const platform = groups.find((group) => group.name === '🌐 游戏平台')
+    expect(game?.proxies).not.toContain('🎮 游戏加速')
+    expect(platform?.proxies).toContain('DIRECT')
+    expect(platform?.proxies).not.toContain('🌐 游戏平台')
+  })
+
+  it('keeps region groups for provider-only profiles', () => {
+    const profile = {
+      ...baseProfile,
+      proxies: [],
+      'proxy-groups': [],
+      'proxy-providers': {
+        demo: { type: 'http', url: 'https://example.com/provider.yaml' }
+      },
+      rules: ['MATCH,DIRECT']
+    } as unknown as MihomoConfig
+    const config = createConfig()
+    config.regions = [{ name: '香港', filter: '香港|hk', enable: true }]
+    const result = compile(profile, config)
+    const groups = result.profile['proxy-groups'] as unknown as GroupLike[]
+    const game = groups.find((group) => group.name === '🎮 游戏加速')
+    expect(groups.some((group) => group.name === '🎮 区域·香港')).toBe(true)
+    expect(result.diagnostics.some((item) => item.code === 'REGION_EMPTY')).toBe(false)
+    expect(game?.['default-selected']).toBe('DIRECT')
+  })
+
+  it('uses a per-game node and exposes nodes on the platform group', () => {
+    const config = createConfig()
+    config.games[0].policy = '香港 01'
+    const result = compile(baseProfile, config)
+    const rules = result.profile.rules as unknown as string[]
+    const groups = result.profile['proxy-groups'] as unknown as GroupLike[]
+    const platform = groups.find((group) => group.name === '🌐 游戏平台')
+
+    expect(rules).toContain('DOMAIN-SUFFIX,apex.com,香港 01')
+    expect(rules).toContain('PROCESS-NAME,r5apex.exe,香港 01')
+    expect(platform?.proxies).toContain('香港 01')
+    expect(platform?.proxies).toContain('节点选择')
+  })
+
   it('keeps the download group direct unless downloadViaProxy is enabled', () => {
     const result = compile()
     const groups = result.profile['proxy-groups'] as unknown as GroupLike[]
@@ -196,5 +264,64 @@ describe('compileGameAccel', () => {
     const result = compile(baseProfile, config)
     expect(result.diagnostics.some((item) => item.code === 'GAME_PATH_INVALID')).toBe(true)
     expect(result.diagnostics.some((item) => item.code === 'GAME_DOMAIN_INVALID')).toBe(true)
+  })
+
+  it('keeps mixed-domain direct fallbacks reachable', () => {
+    const config = createConfig()
+    config.platforms = Object.fromEntries(
+      ['gog', 'ubisoft', 'ea', 'battlenet', 'xbox'].map((id) => [
+        id,
+        {
+          enable: true,
+          extraDownload: [],
+          extraDownloadKeyword: [],
+          extraPlatform: [],
+          removed: []
+        }
+      ])
+    )
+    const result = compile(baseProfile, config)
+    const rules = result.profile.rules as unknown as string[]
+
+    const pairs: [string, string][] = [
+      ['www.gog.com', 'gog.com'],
+      ['www.ubisoft.com', 'ubisoft.com'],
+      ['www.ea.com', 'ea.com'],
+      ['www.blizzard.com', 'blizzard.com'],
+      ['xbox.com', 'xboxlive.com']
+    ]
+    for (const [platformDomain, mixedDomain] of pairs) {
+      expect(ruleIndex(rules, `DOMAIN,${platformDomain},🌐 游戏平台`)).toBeGreaterThan(-1)
+      expect(ruleIndex(rules, `DOMAIN-SUFFIX,${mixedDomain},DIRECT`)).toBeGreaterThan(-1)
+      expect(ruleIndex(rules, `DOMAIN,${platformDomain},🌐 游戏平台`)).toBeLessThan(
+        ruleIndex(rules, `DOMAIN-SUFFIX,${mixedDomain},DIRECT`)
+      )
+    }
+    expect(rules).not.toContain('DOMAIN-SUFFIX,gog.com,🌐 游戏平台')
+    expect(rules).not.toContain('DOMAIN-SUFFIX,ea.com,🌐 游戏平台')
+    expect(result.diagnostics.some((item) => item.code === 'GEOSITE_MISSING')).toBe(false)
+  })
+
+  it('reports actual generated group names after conflict renaming', () => {
+    const profile = {
+      ...baseProfile,
+      'proxy-groups': [
+        { name: '🎮 游戏加速', type: 'select', proxies: ['香港 01'] },
+        { name: '节点选择', type: 'select', proxies: ['香港 01', '日本 01'] }
+      ]
+    } as unknown as MihomoConfig
+    const result = compile(profile)
+    const groups = result.profile['proxy-groups'] as unknown as GroupLike[]
+    expect(result.summary.groupNames.game).toBe('🎮 游戏加速 2')
+    expect(groups.some((group) => group.name === '🎮 游戏加速 2')).toBe(true)
+  })
+
+  it('skips regions with invalid filters instead of writing an invalid regex', () => {
+    const config = createConfig()
+    config.regions = [{ name: '坏', filter: '[', enable: true }]
+    const result = compile(baseProfile, config)
+    const groups = result.profile['proxy-groups'] as unknown as GroupLike[]
+    expect(result.diagnostics.some((item) => item.code === 'REGION_FILTER_INVALID')).toBe(true)
+    expect(groups.some((group) => group.name === '🎮 区域·坏')).toBe(false)
   })
 })

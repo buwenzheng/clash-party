@@ -30,33 +30,31 @@ function intervalDelayMs(interval: unknown): number | undefined {
 
 async function updateProfile(id: string): Promise<void> {
   if (updatingProfileIds.has(id)) return
-  const item = await getProfileItem(id)
-  if (item && item.type === 'remote') {
-    try {
-      const { loadGameAccelConfig } = await import('../game/store')
-      const gameConfig = await loadGameAccelConfig()
-      if (gameConfig.enable && gameConfig.session.protect) {
-        const { getGameLiveState } = await import('../game/live')
-        if (getGameLiveState().currentGame) {
-          await logger.info('[ProfileUpdater] Skipped profile update during active game session')
-          scheduleDelayedCurrentUpdate(item)
-          return
-        }
-      }
-    } catch {
-      // Game acceleration is optional; updater tests may not load Electron.
-    }
-  }
   updatingProfileIds.add(id)
   try {
     const item = await getProfileItem(id)
-    if (item && item.type === 'remote') {
+    if (!item) return
+    if (item.type === 'remote') {
+      try {
+        const { loadGameAccelConfig } = await import('../game/store')
+        const gameConfig = await loadGameAccelConfig()
+        if (gameConfig.enable && gameConfig.session.protect) {
+          const { isGameSessionActive } = await import('../game/live')
+          if (isGameSessionActive()) {
+            await logger.info('[ProfileUpdater] Skipped profile update during active game session')
+            scheduleDelayedCurrentUpdate(item)
+            return
+          }
+        }
+      } catch {
+        // Game acceleration is optional; updater tests may not load Electron.
+      }
       await addProfileItem(item)
       // 后台定时更新完成后主动通知渲染层，否则订阅列表的更新时间/流量要等窗口重新聚焦才刷新（#1570）
       // 动态 import 避免与 window.ts 形成静态循环依赖
       const { mainWindow } = await import('../window')
       mainWindow?.webContents.send('profileConfigUpdated')
-    } else if (item && item.type === 'plugin' && item.pluginId) {
+    } else if (item.type === 'plugin' && item.pluginId) {
       const { updatePluginProfile } = await import('../resolve/plugin')
       await updatePluginProfile(item.pluginId)
     }
@@ -115,6 +113,7 @@ function scheduleDelayedCurrentUpdate(item: IProfileItem): void {
   if (!delayMs) return
 
   const itemId = item.id
+  if (delayedUpdatePool[itemId]) clearTimeout(delayedUpdatePool[itemId])
   delayedUpdatePool[itemId] = setTimeout(
     async () => {
       delete delayedUpdatePool[itemId]

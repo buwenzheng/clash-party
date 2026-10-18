@@ -13,6 +13,7 @@ import {
   patchControledMihomoConfig
 } from '../config'
 import { DEFAULT_MIHOMO_PORTS } from '../../shared/appConfig'
+import { GAME_ACCEL_LISTEN_CHANNELS } from '../../shared/game/ipc-channels'
 import icoIcon from '../../../resources/icon.ico?asset'
 import icoIconBlue from '../../../resources/icon_blue.ico?asset'
 import icoIconRed from '../../../resources/icon_red.ico?asset'
@@ -180,6 +181,7 @@ export const buildContextMenu = async (): Promise<Menu> => {
         click: async (): Promise<void> => {
           await patchGameAccelConfig({ enable: !gameState?.config.enable })
           await mihomoHotReloadConfig()
+          mainWindow?.webContents.send(GAME_ACCEL_LISTEN_CHANNELS.updated)
           await refreshTrayMenu()
         }
       },

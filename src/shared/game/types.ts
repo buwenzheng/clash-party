@@ -133,7 +133,7 @@ export interface GameAccelConfig {
   games: GameItem[]
   pendingGlobalRestore?: {
     mode: 'rule' | 'global' | 'direct'
-    global: string
+    global?: string
     gameId: string
   }
   tuning: GameAccelTuning
@@ -163,6 +163,11 @@ export interface GeneratedRule {
 }
 
 export interface GeneratedSummary {
+  groupNames: {
+    game: string
+    platform: string
+    download: string
+  }
   groups: string[]
   rules: GeneratedRule[]
   ruleProviders: string[]
@@ -223,7 +228,7 @@ export interface GuardAlert {
   layer: GeneratedRuleLayer | 'unknown'
   suggestedAction: 'direct' | 'proxy' | 'downloadMode'
   at: number
-  handled?: 'direct' | 'proxy' | 'downloadMode' | 'ignored' | 'auto'
+  handled?: 'direct' | 'proxy' | 'ignored' | 'auto'
 }
 
 export interface GameAccelLiveState {
