@@ -951,5 +951,9 @@
   "gameAccel.optimized": "بهترین گره انتخاب شد",
   "gameAccel.optimizeFailed": "گره‌ای در دسترس نیست",
   "gameAccel.webDirect": "وب مستقیم",
-  "gameAccel.restoreAuto": "بازگردانی خودکار"
+  "gameAccel.restoreAuto": "بازگردانی خودکار",
+  "tray.gameAccel": "شتاب بازی",
+  "tray.gameAccelEnable": "فعال‌سازی شتاب بازی",
+  "tray.gameAccelDisable": "خاموش کردن شتاب بازی",
+  "tray.gameAccelNoGame": "بازی‌ای شناسایی نشد"
 }

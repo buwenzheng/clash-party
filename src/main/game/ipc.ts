@@ -49,6 +49,18 @@ function normalizePath(value: string): string {
   return process.platform === 'win32' ? resolved.toLowerCase() : resolved
 }
 
+function isBodyInvalidError(error: unknown): boolean {
+  if (typeof error === 'string') return error.includes('Body invalid')
+  if (error && typeof error === 'object') {
+    const value = error as { message?: string; response?: { data?: unknown } }
+    return (
+      value.message?.includes('Body invalid') === true ||
+      String(value.response?.data ?? '').includes('Body invalid')
+    )
+  }
+  return false
+}
+
 async function buildGameFromPath(input: string): Promise<GameItem> {
   if (!input.trim()) throw new Error('Game path is required')
   const target = path.resolve(input.trim())
@@ -204,7 +216,7 @@ export async function gameAccelRestoreAuto(): Promise<void> {
   try {
     await mihomoUnfixedProxy(config.groupNames.platform)
   } catch (error) {
-    if (!String(error).includes('Body invalid')) throw error
+    if (!isBodyInvalidError(error)) throw error
   }
 }
 

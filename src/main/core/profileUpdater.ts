@@ -30,6 +30,23 @@ function intervalDelayMs(interval: unknown): number | undefined {
 
 async function updateProfile(id: string): Promise<void> {
   if (updatingProfileIds.has(id)) return
+  const item = await getProfileItem(id)
+  if (item && item.type === 'remote') {
+    try {
+      const { loadGameAccelConfig } = await import('../game/store')
+      const gameConfig = await loadGameAccelConfig()
+      if (gameConfig.enable && gameConfig.session.protect) {
+        const { getGameLiveState } = await import('../game/live')
+        if (getGameLiveState().currentGame) {
+          await logger.info('[ProfileUpdater] Skipped profile update during active game session')
+          scheduleDelayedCurrentUpdate(item)
+          return
+        }
+      }
+    } catch {
+      // Game acceleration is optional; updater tests may not load Electron.
+    }
+  }
   updatingProfileIds.add(id)
   try {
     const item = await getProfileItem(id)

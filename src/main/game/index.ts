@@ -9,6 +9,7 @@ import type {
   GeneratedSummary
 } from '../../shared/game/types'
 import { compileGameAccel } from './compiler'
+import { restorePendingGlobal } from './live'
 import { getAntiCheatPreset, listBuiltinPresets } from './presets'
 import { loadGameAccelConfig } from './store'
 
@@ -24,6 +25,7 @@ export async function initGameAccel(): Promise<void> {
   try {
     const config = await getConfig()
     lastDiagnostics = []
+    await restorePendingGlobal()
     logger.info(`Game acceleration initialized, enabled=${config.enable}`)
   } catch (error) {
     logger.warn('Failed to initialize game acceleration', error)

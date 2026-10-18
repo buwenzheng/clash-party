@@ -957,5 +957,9 @@
   "gameAccel.optimized": "Выбран лучший узел",
   "gameAccel.optimizeFailed": "Нет доступных узлов",
   "gameAccel.webDirect": "Прямой веб",
-  "gameAccel.restoreAuto": "Восстановить авто"
+  "gameAccel.restoreAuto": "Восстановить авто",
+  "tray.gameAccel": "Ускорение игр",
+  "tray.gameAccelEnable": "Включить ускорение игр",
+  "tray.gameAccelDisable": "Выключить ускорение игр",
+  "tray.gameAccelNoGame": "Игра не обнаружена"
 }

@@ -974,5 +974,9 @@
   "gameAccel.optimized": "Best node selected",
   "gameAccel.optimizeFailed": "No available node",
   "gameAccel.webDirect": "Direct web",
-  "gameAccel.restoreAuto": "Restore auto"
+  "gameAccel.restoreAuto": "Restore auto",
+  "tray.gameAccel": "Game boost",
+  "tray.gameAccelEnable": "Enable game boost",
+  "tray.gameAccelDisable": "Disable game boost",
+  "tray.gameAccelNoGame": "No game detected"
 }

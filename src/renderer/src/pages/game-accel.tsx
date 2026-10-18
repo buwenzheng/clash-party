@@ -22,6 +22,7 @@ import {
   gameAccelAddFromPath,
   gameAccelDiagnose,
   gameAccelGetLiveState,
+  gameAccelGetPresets,
   gameAccelGetState,
   gameAccelHandleGuardAlert,
   gameAccelOptimizeGroup,
@@ -44,13 +45,14 @@ import type {
   GameAccelLiveState,
   GameCandidate,
   GameItem,
+  PlatformPreset,
   PlatformSetting
 } from '../../../shared/game/types'
 
-const PLATFORMS = [
-  { id: 'steam', label: 'Steam' },
-  { id: 'epic', label: 'Epic Games' }
-] as const
+const DEFAULT_PLATFORMS = [
+  { id: 'steam', name: 'Steam' },
+  { id: 'epic', name: 'Epic Games' }
+]
 
 const EMPTY_PLATFORM: PlatformSetting = {
   enable: false,
@@ -167,6 +169,12 @@ const GameAccel: React.FC = () => {
     { refreshInterval: 5000, revalidateOnFocus: false }
   )
   const { groups, mutate: mutateGroups } = useGroups()
+  const { data: presets } = useSWR('gameAccelGetPresets', gameAccelGetPresets, {
+    revalidateOnFocus: false
+  })
+  const platformItems: Pick<PlatformPreset, 'id' | 'name'>[] = presets?.length
+    ? presets
+    : DEFAULT_PLATFORMS
   const { controledMihomoConfig } = useControledMihomoConfig()
   const [draft, setDraft] = useState<GameAccelConfig>()
   const [dirty, setDirty] = useState(false)
@@ -775,18 +783,18 @@ const GameAccel: React.FC = () => {
             <h3 className="font-bold">{t('gameAccel.platforms')}</h3>
           </CardHeader>
           <CardBody className="flex flex-wrap gap-3 p-4">
-            {PLATFORMS.map((platform) => (
+            {platformItems.map((platform) => (
               <div
                 key={platform.id}
                 data-testid={`platform-${platform.id}`}
                 className="flex items-center gap-2 rounded-medium border border-default-200 px-3 py-2"
               >
                 <Switch
-                  aria-label={platform.label}
+                  aria-label={platform.name}
                   isSelected={draft.platforms[platform.id]?.enable ?? false}
                   onValueChange={(enable) => updatePlatform(platform.id, enable)}
                 />
-                <span className="text-small">{platform.label}</span>
+                <span className="text-small">{platform.name}</span>
               </div>
             ))}
           </CardBody>
@@ -908,17 +916,17 @@ const GameAccel: React.FC = () => {
                   <div>
                     <p className="mb-2 text-small font-medium">{t('gameAccel.platforms')}</p>
                     <div className="flex flex-wrap gap-3">
-                      {PLATFORMS.map((platform) => (
+                      {platformItems.map((platform) => (
                         <div
                           key={platform.id}
                           className="flex items-center gap-2 rounded-medium border border-default-200 px-3 py-2"
                         >
                           <Switch
-                            aria-label={platform.label}
+                            aria-label={platform.name}
                             isSelected={draft.platforms[platform.id]?.enable ?? false}
                             onValueChange={(enable) => updatePlatform(platform.id, enable)}
                           />
-                          <span className="text-small">{platform.label}</span>
+                          <span className="text-small">{platform.name}</span>
                         </div>
                       ))}
                     </div>

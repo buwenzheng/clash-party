@@ -974,5 +974,9 @@
   "gameAccel.optimized": "已選擇最佳節點",
   "gameAccel.optimizeFailed": "沒有可用節點",
   "gameAccel.webDirect": "網頁直連",
-  "gameAccel.restoreAuto": "恢復自動"
+  "gameAccel.restoreAuto": "恢復自動",
+  "tray.gameAccel": "遊戲加速",
+  "tray.gameAccelEnable": "啟用遊戲加速",
+  "tray.gameAccelDisable": "關閉遊戲加速",
+  "tray.gameAccelNoGame": "未偵測到遊戲"
 }

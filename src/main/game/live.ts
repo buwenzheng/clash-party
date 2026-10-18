@@ -8,7 +8,7 @@ import type {
   GameAccelLiveState,
   GuardAlert
 } from '../../shared/game/types'
-import { loadGameAccelConfig } from './store'
+import { loadGameAccelConfig, patchGameAccelConfig } from './store'
 
 let latestInfo: IMihomoConnectionsInfo | undefined
 let processing = false
@@ -29,6 +29,8 @@ let capturePreexisting = new Set<string>()
 let alerts: GuardAlert[] = []
 let lastNotifyAt = 0
 let configCache: { at: number; config: GameAccelConfig } | undefined
+let globalGameId: string | undefined
+let globalBusy = false
 const guardSince = new Map<string, number>()
 const guardAlertAt = new Map<string, number>()
 
@@ -76,6 +78,79 @@ function findCurrentGame(
     }
   }
   return undefined
+}
+
+function findGlobalGame(
+  config: GameAccelConfig,
+  connections: IMihomoConnectionDetail[]
+): GameAccelConfig['games'][number] | undefined {
+  return config.games.find(
+    (game) =>
+      game.enable &&
+      game.routeMode === 'global' &&
+      connections.some((connection) => matchesGame(game, connection))
+  )
+}
+
+export async function restorePendingGlobal(): Promise<void> {
+  const config = await loadGameAccelConfig().catch(() => undefined)
+  const pending = config?.pendingGlobalRestore
+  if (!pending) {
+    globalGameId = undefined
+    return
+  }
+  try {
+    const { patchMihomoConfig } = await import('../core/mihomoApi')
+    await patchMihomoConfig({
+      mode: pending.mode,
+      ...(pending.global ? { GLOBAL: pending.global } : {})
+    } as unknown as Partial<IMihomoConfig>)
+    await patchGameAccelConfig({ pendingGlobalRestore: undefined })
+  } catch {
+    // Keep the marker for the next startup attempt.
+  }
+  globalGameId = undefined
+  configCache = undefined
+}
+
+async function handleGlobalFallback(
+  config: GameAccelConfig,
+  connections: IMihomoConnectionDetail[]
+): Promise<void> {
+  if (globalBusy) return
+  globalBusy = true
+  try {
+    const active = config.enable ? findGlobalGame(config, connections) : undefined
+    if (active) {
+      if (globalGameId === active.id || config.pendingGlobalRestore) {
+        globalGameId = active.id
+        return
+      }
+      const { getControledMihomoConfig } = await import('../config')
+      const { getRuntimeConfig } = await import('../core/factory')
+      const controlled = await getControledMihomoConfig()
+      const runtime = await getRuntimeConfig()
+      const originalGlobal = (runtime as unknown as { GLOBAL?: string } | undefined)?.GLOBAL ?? ''
+      await patchGameAccelConfig({
+        pendingGlobalRestore: {
+          mode: controlled.mode ?? 'rule',
+          global: originalGlobal,
+          gameId: active.id
+        }
+      })
+      configCache = undefined
+      const { patchMihomoConfig } = await import('../core/mihomoApi')
+      await patchMihomoConfig({
+        mode: 'global',
+        GLOBAL: config.groupNames.game
+      } as unknown as Partial<IMihomoConfig>)
+      globalGameId = active.id
+      return
+    }
+    if (globalGameId || config.pendingGlobalRestore) await restorePendingGlobal()
+  } finally {
+    globalBusy = false
+  }
 }
 
 function aggregateCapture(connections: IMihomoConnectionDetail[], now: number): CaptureProcess[] {
@@ -189,6 +264,7 @@ async function processInfo(info: IMihomoConnectionsInfo): Promise<void> {
   const connections = info.connections ?? []
   const now = Date.now()
   if (config.enable && config.guard.enable) evaluateGuard(config, connections, now)
+  await handleGlobalFallback(config, connections).catch(() => undefined)
   live = {
     updatedAt: now,
     currentGame: config.enable ? findCurrentGame(config, connections) : undefined,

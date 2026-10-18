@@ -20,6 +20,7 @@ import {
   themesDir
 } from '../utils/dirs'
 import { getAppConfig } from '../config'
+import { gameAccelConfigPath } from '../game/store'
 
 let backupCronJob: Cron | null = null
 
@@ -91,7 +92,8 @@ function createBackupZip(): AdmZip {
     appConfigPath(),
     controledMihomoConfigPath(),
     profileConfigPath(),
-    overrideConfigPath()
+    overrideConfigPath(),
+    gameAccelConfigPath()
   ]
 
   const folders = [

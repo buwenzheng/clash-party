@@ -27,6 +27,7 @@ import {
   mihomoCloseAllConnections,
   mihomoGroupDelay,
   mihomoGroups,
+  mihomoHotReloadConfig,
   patchMihomoConfig,
   getTrayIconStatus,
   calculateTrayIconStatus
@@ -42,6 +43,9 @@ import {
 } from '../core/manager'
 import { trayLogger } from '../utils/logger'
 import { writeClipboardText } from '../utils/clipboard'
+import { getGameAccelState } from '../game'
+import { getGameLiveState } from '../game/live'
+import { patchGameAccelConfig } from '../game/store'
 import { floatingWindow, triggerFloatingWindow } from './floatingWindow'
 
 export let tray: Tray | null = null
@@ -162,6 +166,32 @@ export const buildContextMenu = async (): Promise<Menu> => {
   }
   const { current, items = [] } = await getProfileConfig()
 
+  const gameState = await getGameAccelState().catch(() => undefined)
+  const gameLive = getGameLiveState()
+  const gameAccelMenu: Electron.MenuItemConstructorOptions = {
+    id: 'game-accel',
+    label: t('tray.gameAccel'),
+    type: 'submenu',
+    submenu: [
+      {
+        id: 'game-accel-toggle',
+        label: gameState?.config.enable ? t('tray.gameAccelDisable') : t('tray.gameAccelEnable'),
+        type: 'normal',
+        click: async (): Promise<void> => {
+          await patchGameAccelConfig({ enable: !gameState?.config.enable })
+          await mihomoHotReloadConfig()
+          await refreshTrayMenu()
+        }
+      },
+      {
+        id: 'game-accel-current',
+        label: gameLive.currentGame?.name ?? t('tray.gameAccelNoGame'),
+        type: 'normal',
+        enabled: false
+      }
+    ]
+  }
+
   const contextMenu = [
     {
       id: 'show',
@@ -172,6 +202,7 @@ export const buildContextMenu = async (): Promise<Menu> => {
         showMainWindow()
       }
     },
+    gameAccelMenu,
     {
       id: 'show-floating',
       accelerator: showFloatingWindowShortcut,
@@ -500,6 +531,11 @@ async function updateTrayMenu(): Promise<void> {
   if (process.platform === 'linux') {
     tray?.setContextMenu(trayMenu)
   }
+}
+
+async function refreshTrayMenu(): Promise<void> {
+  trayMenu = await buildContextMenu()
+  tray?.setContextMenu(trayMenu)
 }
 
 export async function copyEnv(
