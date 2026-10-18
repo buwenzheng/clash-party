@@ -6,6 +6,7 @@ import type {
   GameAccelDiagnostic,
   GameAccelPreview,
   GameAccelState,
+  GameCandidate,
   GameItem,
   PlatformPreset
 } from '../../../shared/game/types'
@@ -44,6 +45,10 @@ export function gameAccelRemoveGame(id: string): Promise<void> {
 
 export function gameAccelAddFromPath(filePath: string): Promise<GameAccelAddResult> {
   return invoke(GAME_ACCEL_INVOKE_CHANNELS.addFromPath, filePath)
+}
+
+export function gameAccelScan(): Promise<GameCandidate[]> {
+  return invoke(GAME_ACCEL_INVOKE_CHANNELS.scan)
 }
 
 export function gameAccelPreview(): Promise<GameAccelPreview> {

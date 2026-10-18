@@ -13,12 +13,14 @@ import type {
   GameAccelDiagnostic,
   GameAccelPreview,
   GameAccelState,
+  GameCandidate,
   GameItem,
   PlatformPreset
 } from '../../shared/game/types'
 import { mihomoHotReloadConfig } from '../core/mihomoApi'
 import { mainWindow } from '../window'
 import { listBuiltinPresets, mergePlatformPreset } from './presets'
+import { scanGameCandidates } from './scan'
 import { loadGameAccelConfig, patchGameAccelConfig } from './store'
 import { getGameAccelPreview, getGameAccelState, runGameAccelDiagnose } from './index'
 
@@ -105,6 +107,10 @@ export async function gameAccelAddFromPath(filePath: string): Promise<GameAccelA
   return existing ? { game: existing, duplicate: true } : { game, duplicate: false }
 }
 
+export async function gameAccelScan(): Promise<GameCandidate[]> {
+  return scanGameCandidates()
+}
+
 export async function gameAccelGetConfig(): Promise<GameAccelConfig> {
   return loadGameAccelConfig()
 }
@@ -170,6 +176,7 @@ export const gameAccelHandlers = {
   [GAME_ACCEL_INVOKE_CHANNELS.upsertGame]: gameAccelUpsertGame,
   [GAME_ACCEL_INVOKE_CHANNELS.removeGame]: gameAccelRemoveGame,
   [GAME_ACCEL_INVOKE_CHANNELS.addFromPath]: gameAccelAddFromPath,
+  [GAME_ACCEL_INVOKE_CHANNELS.scan]: gameAccelScan,
   [GAME_ACCEL_INVOKE_CHANNELS.preview]: gameAccelPreview,
   [GAME_ACCEL_INVOKE_CHANNELS.diagnose]: gameAccelDiagnose,
   [GAME_ACCEL_INVOKE_CHANNELS.getPresets]: gameAccelGetPresets,

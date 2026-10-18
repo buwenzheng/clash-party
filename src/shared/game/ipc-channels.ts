@@ -5,6 +5,7 @@ export const GAME_ACCEL_INVOKE_CHANNELS = {
   upsertGame: 'gameAccelUpsertGame',
   removeGame: 'gameAccelRemoveGame',
   addFromPath: 'gameAccelAddFromPath',
+  scan: 'gameAccelScan',
   preview: 'gameAccelPreview',
   diagnose: 'gameAccelDiagnose',
   getPresets: 'gameAccelGetPresets',

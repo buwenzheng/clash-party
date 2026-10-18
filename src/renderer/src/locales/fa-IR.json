@@ -924,5 +924,10 @@
   "gameAccel.onboarding.tunOff": "TUN خاموش است؛ ممکن است ترافیک بازی گرفته نشود.",
   "gameAccel.onboarding.nodeHint": "پس از فعال‌سازی می‌توانید گره‌ها را از کارت‌های گروه تغییر دهید.",
   "gameAccel.onboarding.confirm": "ذخیره و فعال‌سازی",
-  "gameAccel.onboarding.cancel": "فعلاً نه"
+  "gameAccel.onboarding.cancel": "فعلاً نه",
+  "gameAccel.scan": "اسکن کتابخانه‌ها",
+  "gameAccel.scanEmpty": "بازی‌ای برای افزودن پیدا نشد",
+  "gameAccel.scanAdd": "افزودن انتخاب‌شده‌ها",
+  "gameAccel.scanAdded": "افزوده شد",
+  "gameAccel.scanFailed": "اسکن ناموفق بود"
 }

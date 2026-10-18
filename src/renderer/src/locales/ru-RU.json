@@ -930,5 +930,10 @@
   "gameAccel.onboarding.tunOff": "TUN выключен; игровой трафик может не перехватываться.",
   "gameAccel.onboarding.nodeHint": "После включения узлы можно менять в карточках групп.",
   "gameAccel.onboarding.confirm": "Сохранить и включить",
-  "gameAccel.onboarding.cancel": "Не сейчас"
+  "gameAccel.onboarding.cancel": "Не сейчас",
+  "gameAccel.scan": "Сканировать библиотеки",
+  "gameAccel.scanEmpty": "Игры не найдены",
+  "gameAccel.scanAdd": "Добавить выбранные",
+  "gameAccel.scanAdded": "Добавлено",
+  "gameAccel.scanFailed": "Ошибка сканирования"
 }

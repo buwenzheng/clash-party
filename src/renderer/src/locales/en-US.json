@@ -947,5 +947,10 @@
   "gameAccel.onboarding.tunOff": "TUN is disabled; game traffic may not be captured.",
   "gameAccel.onboarding.nodeHint": "Switch nodes from the strategy group cards after enabling.",
   "gameAccel.onboarding.confirm": "Save and enable",
-  "gameAccel.onboarding.cancel": "Not now"
+  "gameAccel.onboarding.cancel": "Not now",
+  "gameAccel.scan": "Scan libraries",
+  "gameAccel.scanEmpty": "No games found to add",
+  "gameAccel.scanAdd": "Add selected",
+  "gameAccel.scanAdded": "Added",
+  "gameAccel.scanFailed": "Scan failed"
 }

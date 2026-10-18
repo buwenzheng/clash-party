@@ -947,5 +947,10 @@
   "gameAccel.onboarding.tunOff": "TUN 未開啟，可能無法接管遊戲流量。",
   "gameAccel.onboarding.nodeHint": "開啟後可在頁面的策略組卡片中切換節點。",
   "gameAccel.onboarding.confirm": "儲存並開啟",
-  "gameAccel.onboarding.cancel": "暫不開啟"
+  "gameAccel.onboarding.cancel": "暫不開啟",
+  "gameAccel.scan": "掃描平台庫",
+  "gameAccel.scanEmpty": "未發現可新增的遊戲",
+  "gameAccel.scanAdd": "新增選中",
+  "gameAccel.scanAdded": "已新增",
+  "gameAccel.scanFailed": "掃描失敗"
 }

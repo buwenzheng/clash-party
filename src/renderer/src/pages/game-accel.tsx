@@ -21,7 +21,8 @@ import { useGroups } from '@renderer/hooks/use-groups'
 import {
   gameAccelAddFromPath,
   gameAccelGetState,
-  gameAccelPatchConfig
+  gameAccelPatchConfig,
+  gameAccelScan
 } from '@renderer/utils/game-accel-ipc'
 import { getFilePath, mihomoChangeProxy } from '@renderer/utils/ipc'
 import React, { useEffect, useState } from 'react'
@@ -29,7 +30,12 @@ import { useTranslation } from 'react-i18next'
 import { IoAdd, IoCheckmarkCircleOutline, IoTrashOutline, IoWarningOutline } from 'react-icons/io5'
 import { useNavigate } from 'react-router-dom'
 import useSWR from 'swr'
-import type { GameAccelConfig, PlatformSetting } from '../../../shared/game/types'
+import type {
+  GameAccelConfig,
+  GameCandidate,
+  GameItem,
+  PlatformSetting
+} from '../../../shared/game/types'
 
 const PLATFORMS = [
   { id: 'steam', label: 'Steam' },
@@ -42,6 +48,10 @@ const EMPTY_PLATFORM: PlatformSetting = {
   extraDownloadKeyword: [],
   extraPlatform: [],
   removed: []
+}
+
+function candidateKey(candidate: GameCandidate): string {
+  return `${candidate.source}:${candidate.sourceId}`
 }
 
 interface GroupCardProps {
@@ -119,6 +129,11 @@ const GameAccel: React.FC = () => {
   const [saving, setSaving] = useState(false)
   const [adding, setAdding] = useState(false)
   const [onboardingOpen, setOnboardingOpen] = useState(false)
+  const [scanOpen, setScanOpen] = useState(false)
+  const [scanning, setScanning] = useState(false)
+  const [scanAdding, setScanAdding] = useState(false)
+  const [scanResults, setScanResults] = useState<GameCandidate[]>([])
+  const [scanSelected, setScanSelected] = useState<Set<string>>(new Set())
 
   useEffect(() => {
     if (state && !dirty) setDraft(state.config)
@@ -198,6 +213,74 @@ const GameAccel: React.FC = () => {
       toast.error(String(error))
     } finally {
       setAdding(false)
+    }
+  }
+
+  const isScanCandidateAdded = (candidate: GameCandidate): boolean => {
+    const directory = candidate.directory.toLowerCase()
+    return draft.games.some((game) =>
+      [...game.match.directories, ...game.match.processPaths].some((value) => {
+        const normalized = value.toLowerCase()
+        return normalized === directory || normalized.startsWith(`${directory}\\`)
+      })
+    )
+  }
+
+  const scan = async (): Promise<void> => {
+    setScanOpen(true)
+    setScanning(true)
+    setScanResults([])
+    try {
+      const results = await gameAccelScan()
+      setScanResults(results)
+      setScanSelected(
+        new Set(results.filter((candidate) => !isScanCandidateAdded(candidate)).map(candidateKey))
+      )
+    } catch (error) {
+      toast.error(`${t('gameAccel.scanFailed')}: ${String(error)}`)
+    } finally {
+      setScanning(false)
+    }
+  }
+
+  const toggleScan = (key: string): void => {
+    setScanSelected((current) => {
+      const next = new Set(current)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
+  }
+
+  const addScanSelected = async (): Promise<void> => {
+    setScanAdding(true)
+    try {
+      const selected = scanResults.filter(
+        (candidate) => scanSelected.has(candidateKey(candidate)) && !isScanCandidateAdded(candidate)
+      )
+      const additions: GameItem[] = []
+      for (const candidate of selected) {
+        const result = await gameAccelAddFromPath(candidate.directory)
+        if (result.duplicate) continue
+        additions.push({
+          ...result.game,
+          name: candidate.name,
+          source: candidate.source,
+          sourceId: candidate.sourceId,
+          icon: result.game.icon ?? candidate.icon,
+          match: { ...result.game.match, directories: [candidate.directory] }
+        })
+      }
+      if (!additions.length) {
+        toast.error(t('gameAccel.duplicateGame'))
+        return
+      }
+      update({ games: [...draft.games, ...additions] })
+      setScanOpen(false)
+    } catch (error) {
+      toast.error(String(error))
+    } finally {
+      setScanAdding(false)
     }
   }
 
@@ -398,18 +481,25 @@ const GameAccel: React.FC = () => {
         <Card className="shadow-none">
           <CardHeader className="flex items-center justify-between gap-2 p-4 pb-0">
             <h3 className="font-bold">{t('gameAccel.games')}</h3>
-            <span data-testid="game-add">
-              <Button
-                size="sm"
-                variant="flat"
-                color="primary"
-                isLoading={adding}
-                startContent={<IoAdd />}
-                onPress={() => void addGame()}
-              >
-                {t('gameAccel.addGame')}
-              </Button>
-            </span>
+            <div className="flex items-center gap-2">
+              <span data-testid="game-scan">
+                <Button size="sm" variant="flat" isLoading={scanning} onPress={() => void scan()}>
+                  {t('gameAccel.scan')}
+                </Button>
+              </span>
+              <span data-testid="game-add">
+                <Button
+                  size="sm"
+                  variant="flat"
+                  color="primary"
+                  isLoading={adding}
+                  startContent={<IoAdd />}
+                  onPress={() => void addGame()}
+                >
+                  {t('gameAccel.addGame')}
+                </Button>
+              </span>
+            </div>
           </CardHeader>
           <CardBody className="p-4">
             {draft.games.length === 0 ? (
@@ -554,6 +644,70 @@ const GameAccel: React.FC = () => {
                   onPress={() => void persist({ ...draft, enable: true })}
                 >
                   {t('gameAccel.onboarding.confirm')}
+                </Button>
+              </ModalFooter>
+            </>
+          )}
+        </ModalContent>
+      </Modal>
+
+      <Modal isOpen={scanOpen} onOpenChange={setScanOpen} size="2xl" scrollBehavior="inside">
+        <ModalContent>
+          {(onClose) => (
+            <>
+              <ModalHeader>{t('gameAccel.scan')}</ModalHeader>
+              <ModalBody>
+                <div data-testid="game-scan-results" className="flex flex-col gap-2">
+                  {scanning ? (
+                    <div className="flex items-center justify-center p-6">
+                      <Spinner />
+                    </div>
+                  ) : scanResults.length === 0 ? (
+                    <p className="p-4 text-small text-default-500">{t('gameAccel.scanEmpty')}</p>
+                  ) : (
+                    scanResults.map((candidate) => {
+                      const key = candidateKey(candidate)
+                      const added = isScanCandidateAdded(candidate)
+                      return (
+                        <label
+                          key={key}
+                          className={`flex items-center gap-3 rounded-medium border border-default-200 p-3 ${added ? 'opacity-60' : ''}`}
+                        >
+                          <input
+                            type="checkbox"
+                            className="h-4 w-4"
+                            checked={added || scanSelected.has(key)}
+                            disabled={added}
+                            onChange={() => toggleScan(key)}
+                          />
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-small font-medium">{candidate.name}</p>
+                            <p className="truncate text-tiny text-default-500">
+                              {candidate.source} · {candidate.directory}
+                            </p>
+                          </div>
+                          {added && (
+                            <Chip size="sm" variant="flat">
+                              {t('gameAccel.scanAdded')}
+                            </Chip>
+                          )}
+                        </label>
+                      )
+                    })
+                  )}
+                </div>
+              </ModalBody>
+              <ModalFooter>
+                <Button variant="light" onPress={onClose}>
+                  {t('common.cancel')}
+                </Button>
+                <Button
+                  color="primary"
+                  isDisabled={scanning || scanSelected.size === 0}
+                  isLoading={scanAdding}
+                  onPress={() => void addScanSelected()}
+                >
+                  {`${t('gameAccel.scanAdd')} (${scanSelected.size})`}
                 </Button>
               </ModalFooter>
             </>
