@@ -1,5 +1,6 @@
 import { GAME_ACCEL_INVOKE_CHANNELS } from '../../../shared/game/ipc-channels'
 import type {
+  GameAccelAddResult,
   GameAccelConfig,
   GameAccelConfigPatch,
   GameAccelDiagnostic,
@@ -39,6 +40,10 @@ export function gameAccelUpsertGame(game: GameItem): Promise<void> {
 
 export function gameAccelRemoveGame(id: string): Promise<void> {
   return invoke(GAME_ACCEL_INVOKE_CHANNELS.removeGame, id)
+}
+
+export function gameAccelAddFromPath(filePath: string): Promise<GameAccelAddResult> {
+  return invoke(GAME_ACCEL_INVOKE_CHANNELS.addFromPath, filePath)
 }
 
 export function gameAccelPreview(): Promise<GameAccelPreview> {

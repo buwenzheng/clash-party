@@ -1,8 +1,13 @@
+import { randomUUID } from 'node:crypto'
+import { stat } from 'node:fs/promises'
+import path from 'node:path'
+import { app } from 'electron'
 import {
   GAME_ACCEL_INVOKE_CHANNELS,
   GAME_ACCEL_LISTEN_CHANNELS
 } from '../../shared/game/ipc-channels'
 import type {
+  GameAccelAddResult,
   GameAccelConfig,
   GameAccelConfigPatch,
   GameAccelDiagnostic,
@@ -19,6 +24,85 @@ import { getGameAccelPreview, getGameAccelState, runGameAccelDiagnose } from './
 
 function notifyUpdated(): void {
   mainWindow?.webContents.send(GAME_ACCEL_LISTEN_CHANNELS.updated)
+}
+
+function normalizePath(value: string): string {
+  const resolved = path.resolve(value)
+  return process.platform === 'win32' ? resolved.toLowerCase() : resolved
+}
+
+async function buildGameFromPath(input: string): Promise<GameItem> {
+  if (!input.trim()) throw new Error('Game path is required')
+  const target = path.resolve(input.trim())
+  const info = await stat(target).catch(() => undefined)
+  if (!info) throw new Error('Game path does not exist')
+
+  let icon: string | undefined
+  try {
+    const image = await app.getFileIcon(target, { size: 'normal' })
+    if (!image.isEmpty()) icon = image.toDataURL()
+  } catch {
+    // Icon extraction is best-effort.
+  }
+
+  const now = Date.now()
+  if (info.isDirectory()) {
+    return {
+      id: randomUUID(),
+      name: path.basename(target) || target,
+      source: 'manual',
+      enable: true,
+      match: {
+        directories: [target],
+        processNames: [],
+        processPaths: [],
+        domains: [],
+        ipCidrs: []
+      },
+      policy: 'inherit',
+      routeMode: 'process',
+      icon,
+      createdAt: now,
+      updatedAt: now
+    }
+  }
+
+  if (!info.isFile() || path.extname(target).toLowerCase() !== '.exe') {
+    throw new Error('Only .exe files or game folders are supported')
+  }
+
+  return {
+    id: randomUUID(),
+    name: path.basename(target, path.extname(target)),
+    source: 'manual',
+    enable: true,
+    match: {
+      directories: [path.dirname(target)],
+      processNames: [path.basename(target)],
+      processPaths: [target],
+      domains: [],
+      ipCidrs: []
+    },
+    policy: 'inherit',
+    routeMode: 'process',
+    icon,
+    createdAt: now,
+    updatedAt: now
+  }
+}
+
+export async function gameAccelAddFromPath(filePath: string): Promise<GameAccelAddResult> {
+  const game = await buildGameFromPath(filePath)
+  const config = await loadGameAccelConfig()
+  const targetPaths = new Set(
+    [...game.match.processPaths, ...game.match.directories].map(normalizePath)
+  )
+  const existing = config.games.find((item) =>
+    [...item.match.processPaths, ...item.match.directories]
+      .map(normalizePath)
+      .some((value) => targetPaths.has(value))
+  )
+  return existing ? { game: existing, duplicate: true } : { game, duplicate: false }
 }
 
 export async function gameAccelGetConfig(): Promise<GameAccelConfig> {
@@ -85,6 +169,7 @@ export const gameAccelHandlers = {
   [GAME_ACCEL_INVOKE_CHANNELS.setEnable]: gameAccelSetEnable,
   [GAME_ACCEL_INVOKE_CHANNELS.upsertGame]: gameAccelUpsertGame,
   [GAME_ACCEL_INVOKE_CHANNELS.removeGame]: gameAccelRemoveGame,
+  [GAME_ACCEL_INVOKE_CHANNELS.addFromPath]: gameAccelAddFromPath,
   [GAME_ACCEL_INVOKE_CHANNELS.preview]: gameAccelPreview,
   [GAME_ACCEL_INVOKE_CHANNELS.diagnose]: gameAccelDiagnose,
   [GAME_ACCEL_INVOKE_CHANNELS.getPresets]: gameAccelGetPresets,

@@ -184,6 +184,11 @@ export interface GameAccelState {
   diagnostics: GameAccelDiagnostic[]
 }
 
+export interface GameAccelAddResult {
+  game: GameItem
+  duplicate: boolean
+}
+
 export interface GameCandidate {
   source: GameSource
   sourceId: string

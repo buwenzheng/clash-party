@@ -922,5 +922,13 @@
   "gameAccel.addGameTitle": "Выберите исполняемый файл игры",
   "gameAccel.emptyGames": "Игр пока нет. Добавьте exe или папку.",
   "gameAccel.manualSource": "Вручную",
-  "gameAccel.saved": "Настройки ускорения игр сохранены"
+  "gameAccel.saved": "Настройки ускорения игр сохранены",
+  "gameAccel.duplicateGame": "Эта игра уже есть в списке",
+  "gameAccel.onboarding.title": "Включить ускорение игр",
+  "gameAccel.onboarding.description": "Для ускорения игр нужен TUN. Загрузки идут напрямую, платформы и игры используют выбранную группу.",
+  "gameAccel.onboarding.tunOn": "TUN включён",
+  "gameAccel.onboarding.tunOff": "TUN выключен; игровой трафик может не перехватываться.",
+  "gameAccel.onboarding.nodeHint": "После включения узлы можно менять в карточках групп.",
+  "gameAccel.onboarding.confirm": "Сохранить и включить",
+  "gameAccel.onboarding.cancel": "Не сейчас"
 }

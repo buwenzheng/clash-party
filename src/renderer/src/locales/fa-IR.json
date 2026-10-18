@@ -916,5 +916,13 @@
   "gameAccel.addGameTitle": "فایل اجرایی بازی را انتخاب کنید",
   "gameAccel.emptyGames": "هنوز بازی‌ای نیست. exe یا پوشه اضافه کنید.",
   "gameAccel.manualSource": "دستی",
-  "gameAccel.saved": "تنظیمات شتاب بازی ذخیره شد"
+  "gameAccel.saved": "تنظیمات شتاب بازی ذخیره شد",
+  "gameAccel.duplicateGame": "این بازی از قبل در فهرست است",
+  "gameAccel.onboarding.title": "روشن کردن شتاب بازی",
+  "gameAccel.onboarding.description": "شتاب بازی برای گرفتن ترافیک بازی به TUN نیاز دارد. دانلودها مستقیم می‌مانند و پلتفرم‌ها و بازی‌ها از گروه انتخابی استفاده می‌کنند.",
+  "gameAccel.onboarding.tunOn": "TUN روشن است",
+  "gameAccel.onboarding.tunOff": "TUN خاموش است؛ ممکن است ترافیک بازی گرفته نشود.",
+  "gameAccel.onboarding.nodeHint": "پس از فعال‌سازی می‌توانید گره‌ها را از کارت‌های گروه تغییر دهید.",
+  "gameAccel.onboarding.confirm": "ذخیره و فعال‌سازی",
+  "gameAccel.onboarding.cancel": "فعلاً نه"
 }

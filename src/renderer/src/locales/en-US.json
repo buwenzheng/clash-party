@@ -939,5 +939,13 @@
   "gameAccel.addGameTitle": "Select game executable",
   "gameAccel.emptyGames": "No games yet. Add an exe or folder.",
   "gameAccel.manualSource": "Manual",
-  "gameAccel.saved": "Game boost settings saved"
+  "gameAccel.saved": "Game boost settings saved",
+  "gameAccel.duplicateGame": "This game is already in the list",
+  "gameAccel.onboarding.title": "Turn on game boost",
+  "gameAccel.onboarding.description": "Game boost needs TUN to capture game traffic. Downloads stay direct while platforms and games use the selected group.",
+  "gameAccel.onboarding.tunOn": "TUN is enabled",
+  "gameAccel.onboarding.tunOff": "TUN is disabled; game traffic may not be captured.",
+  "gameAccel.onboarding.nodeHint": "Switch nodes from the strategy group cards after enabling.",
+  "gameAccel.onboarding.confirm": "Save and enable",
+  "gameAccel.onboarding.cancel": "Not now"
 }

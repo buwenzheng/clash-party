@@ -939,5 +939,13 @@
   "gameAccel.addGameTitle": "选择游戏可执行文件",
   "gameAccel.emptyGames": "还没有游戏，添加 exe 或文件夹",
   "gameAccel.manualSource": "手动",
-  "gameAccel.saved": "游戏加速配置已保存"
+  "gameAccel.saved": "游戏加速配置已保存",
+  "gameAccel.duplicateGame": "游戏已在列表中",
+  "gameAccel.onboarding.title": "开启游戏加速",
+  "gameAccel.onboarding.description": "游戏加速需要 TUN 接管游戏流量；下载会自动直连，平台和游戏走所选策略组。",
+  "gameAccel.onboarding.tunOn": "TUN 已开启",
+  "gameAccel.onboarding.tunOff": "TUN 未开启，可能无法接管游戏流量。",
+  "gameAccel.onboarding.nodeHint": "开启后可在页面的策略组卡片中切换节点。",
+  "gameAccel.onboarding.confirm": "保存并开启",
+  "gameAccel.onboarding.cancel": "暂不开启"
 }

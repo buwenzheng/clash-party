@@ -6,6 +6,11 @@ import {
   CardBody,
   CardHeader,
   Chip,
+  Modal,
+  ModalBody,
+  ModalContent,
+  ModalFooter,
+  ModalHeader,
   Select,
   SelectItem,
   Spinner,
@@ -13,14 +18,18 @@ import {
 } from '@heroui/react'
 import { useControledMihomoConfig } from '@renderer/hooks/use-controled-mihomo-config'
 import { useGroups } from '@renderer/hooks/use-groups'
-import { gameAccelGetState, gameAccelPatchConfig } from '@renderer/utils/game-accel-ipc'
+import {
+  gameAccelAddFromPath,
+  gameAccelGetState,
+  gameAccelPatchConfig
+} from '@renderer/utils/game-accel-ipc'
 import { getFilePath, mihomoChangeProxy } from '@renderer/utils/ipc'
 import React, { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { IoAdd, IoTrashOutline, IoWarningOutline } from 'react-icons/io5'
+import { IoAdd, IoCheckmarkCircleOutline, IoTrashOutline, IoWarningOutline } from 'react-icons/io5'
 import { useNavigate } from 'react-router-dom'
 import useSWR from 'swr'
-import type { GameAccelConfig, GameItem, PlatformSetting } from '../../../shared/game/types'
+import type { GameAccelConfig, PlatformSetting } from '../../../shared/game/types'
 
 const PLATFORMS = [
   { id: 'steam', label: 'Steam' },
@@ -109,6 +118,7 @@ const GameAccel: React.FC = () => {
   const [dirty, setDirty] = useState(false)
   const [saving, setSaving] = useState(false)
   const [adding, setAdding] = useState(false)
+  const [onboardingOpen, setOnboardingOpen] = useState(false)
 
   useEffect(() => {
     if (state && !dirty) setDraft(state.config)
@@ -174,29 +184,16 @@ const GameAccel: React.FC = () => {
     try {
       const files = await getFilePath(['exe'], t('gameAccel.addGameTitle'), 'Executable')
       if (!files?.length) return
-      const now = Date.now()
-      const games: GameItem[] = files.map((file) => {
-        const base = file.split(/[\\/]/).pop() ?? file
-        const directory = file.replace(/[\\/][^\\/]+$/, '')
-        return {
-          id: crypto.randomUUID(),
-          name: base.replace(/\.exe$/i, ''),
-          source: 'manual',
-          enable: true,
-          match: {
-            directories: directory && directory !== file ? [directory] : [],
-            processNames: [base],
-            processPaths: [file],
-            domains: [],
-            ipCidrs: []
-          },
-          policy: 'inherit',
-          routeMode: 'process',
-          createdAt: now,
-          updatedAt: now
-        }
-      })
-      update({ games: [...draft.games, ...games] })
+      const results = await Promise.all(files.map((file) => gameAccelAddFromPath(file)))
+      const additions = results.filter((result) => !result.duplicate).map((result) => result.game)
+      if (!additions.length) {
+        toast.error(t('gameAccel.duplicateGame'))
+        return
+      }
+      update({ games: [...draft.games, ...additions] })
+      if (results.some((result) => result.duplicate)) {
+        toast.error(t('gameAccel.duplicateGame'))
+      }
     } catch (error) {
       toast.error(String(error))
     } finally {
@@ -204,19 +201,24 @@ const GameAccel: React.FC = () => {
     }
   }
 
-  const save = async (): Promise<void> => {
+  const persist = async (next: GameAccelConfig): Promise<void> => {
     setSaving(true)
     try {
-      await gameAccelPatchConfig(draft)
-      const next = await mutateState()
-      if (next) setDraft(next.config)
+      await gameAccelPatchConfig(next)
+      const updated = await mutateState()
+      if (updated) setDraft(updated.config)
       setDirty(false)
+      setOnboardingOpen(false)
       toast.success(t('gameAccel.saved'))
     } catch (error) {
       toast.error(String(error))
     } finally {
       setSaving(false)
     }
+  }
+
+  const save = (): void => {
+    if (draft) void persist(draft)
   }
 
   const changeGroupProxy = async (group: string, proxy: string): Promise<void> => {
@@ -267,7 +269,17 @@ const GameAccel: React.FC = () => {
                   <Switch
                     aria-label={t('gameAccel.enable')}
                     isSelected={draft.enable}
-                    onValueChange={(enable) => update({ enable })}
+                    onValueChange={(enable) => {
+                      if (
+                        enable &&
+                        (!tunEnabled ||
+                          Object.values(draft.platforms).every((item) => !item.enable))
+                      ) {
+                        setOnboardingOpen(true)
+                        return
+                      }
+                      update({ enable })
+                    }}
                   />
                 </div>
                 <div>
@@ -444,6 +456,110 @@ const GameAccel: React.FC = () => {
           </CardBody>
         </Card>
       </div>
+
+      <Modal
+        isOpen={onboardingOpen}
+        onOpenChange={setOnboardingOpen}
+        size="lg"
+        scrollBehavior="inside"
+      >
+        <ModalContent>
+          {(onClose) => (
+            <>
+              <ModalHeader>{t('gameAccel.onboarding.title')}</ModalHeader>
+              <ModalBody>
+                <div data-testid="game-onboarding" className="flex flex-col gap-4">
+                  <p className="text-small leading-6 text-default-500">
+                    {t('gameAccel.onboarding.description')}
+                  </p>
+
+                  <div
+                    className={`flex items-center gap-3 rounded-medium border p-3 ${tunEnabled ? 'border-success/30 bg-success/10 text-success' : 'border-warning/30 bg-warning/10 text-warning'}`}
+                  >
+                    {tunEnabled ? (
+                      <IoCheckmarkCircleOutline className="shrink-0 text-xl" />
+                    ) : (
+                      <IoWarningOutline className="shrink-0 text-xl" />
+                    )}
+                    <p className="min-w-0 flex-1 text-small">
+                      {tunEnabled
+                        ? t('gameAccel.onboarding.tunOn')
+                        : t('gameAccel.onboarding.tunOff')}
+                    </p>
+                    {!tunEnabled && (
+                      <Button
+                        size="sm"
+                        variant="flat"
+                        color="warning"
+                        onPress={() => {
+                          onClose()
+                          navigate('/tun')
+                        }}
+                      >
+                        {t('gameAccel.goTun')}
+                      </Button>
+                    )}
+                  </div>
+
+                  <div>
+                    <p className="mb-2 text-small font-medium">{t('gameAccel.platforms')}</p>
+                    <div className="flex flex-wrap gap-3">
+                      {PLATFORMS.map((platform) => (
+                        <div
+                          key={platform.id}
+                          className="flex items-center gap-2 rounded-medium border border-default-200 px-3 py-2"
+                        >
+                          <Switch
+                            aria-label={platform.label}
+                            isSelected={draft.platforms[platform.id]?.enable ?? false}
+                            onValueChange={(enable) => updatePlatform(platform.id, enable)}
+                          />
+                          <span className="text-small">{platform.label}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <p className="mb-2 text-small font-medium">{t('gameAccel.upstream')}</p>
+                    <select
+                      className="h-9 w-full rounded-medium border border-default-200 bg-transparent px-2 text-small"
+                      aria-label={t('gameAccel.upstream')}
+                      value={draft.platformUpstream ?? 'auto'}
+                      onChange={(event) => {
+                        const value = event.target.value
+                        update({ platformUpstream: value === 'auto' ? undefined : value })
+                      }}
+                    >
+                      <option value="auto">{t('gameAccel.upstreamAuto')}</option>
+                      {upstreamOptions.map((name) => (
+                        <option key={name} value={name}>
+                          {name}
+                        </option>
+                      ))}
+                    </select>
+                    <p className="mt-2 text-tiny text-default-500">
+                      {t('gameAccel.onboarding.nodeHint')}
+                    </p>
+                  </div>
+                </div>
+              </ModalBody>
+              <ModalFooter>
+                <Button variant="light" onPress={onClose}>
+                  {t('gameAccel.onboarding.cancel')}
+                </Button>
+                <Button
+                  color="primary"
+                  isLoading={saving}
+                  onPress={() => void persist({ ...draft, enable: true })}
+                >
+                  {t('gameAccel.onboarding.confirm')}
+                </Button>
+              </ModalFooter>
+            </>
+          )}
+        </ModalContent>
+      </Modal>
     </BasePage>
   )
 }
