@@ -8,6 +8,16 @@
 - If the hook fails, fix the root cause and retry. Never bypass.
 - Run `pnpm run format:check && pnpm run lint:check && pnpm run typecheck` before committing.
 
+## UI debugging
+
+- Follow `.qoder/skills/clash-party-ui-debug/SKILL.md` for Electron renderer work.
+- Start dev with `$env:REMOTE_DEBUGGING_PORT="9222"; pnpm dev`; attach to the main window (`Clash Party`), not DevTools or the floating window.
+- Prefer `playwright-electron` for snapshots, clicks, forms, console and screenshots. Use `chrome-devtools-electron` for a11y snapshots, CSS, network details and performance traces. Keep `debug-electron` as a fallback only; its Windows log reader is not reliable.
+- After HMR, route changes or an Electron restart, take a fresh snapshot and reconnect MCP sessions. Old refs and pages are invalid.
+- Assert IPC results and check `invokeError`; do not depend on localized UI text.
+- Put UI artifacts in `out/mcp/` and do not commit them. Clean up test configuration and restore the default disabled state after game acceleration tests.
+- Follow the B0 workflow in `game-accel/specs/game-accel/tasks.md` for phase B UI verification.
+
 ## Generated files
 
 - Do not edit `pnpm-lock.yaml` directly; change dependencies via pnpm.
